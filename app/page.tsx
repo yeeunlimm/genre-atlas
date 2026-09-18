@@ -69,7 +69,7 @@ export default function Home(){
  <section className="search-deck" aria-label="Artist discovery">
  <div className="search-main"><h1>DISCOVER</h1>
  <form className="search-form" onSubmit={e=>{e.preventDefault();void search(query);}}><Search size={21}/><label className="sr-only" htmlFor="artist-search">Artist name</label><input id="artist-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search an artist" maxLength={100}/><button className="primary" type="submit" aria-label="Search artists">Search <ArrowRight size={18}/></button></form>
- <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","IU","Jannabi"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
+ <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","A$AP Rocky","Kanye West"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
  <img className="deck-art" src="/reference/cd-collection.png" alt="A collection of handwritten CDs"/>
  </section>
  {error&&<div className="message error" role="alert">{error}<button onClick={()=>void search(query)}>Try again</button></div>}
