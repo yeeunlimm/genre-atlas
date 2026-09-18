@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import {genreLabel,genreOutcome} from "../lib/genre-view.ts";
+const source={name:"사이키델릭 록",title:"사이키델릭 록"};
+assert.equal(genreLabel(source),"Psychedelic Rock");
+assert.equal(source.title,"사이키델릭 록");
+assert.equal(genreLabel({name:"Unmapped genre",title:"Unmapped genre"}),"Unmapped genre");
+assert.equal(genreOutcome(10,2,3,"Indie Rock").fallback,false);
+assert.match(genreOutcome(10,2,3,"Indie Rock").note,/2 of 10/);
+assert.equal(genreOutcome(10,0,0,"Indie Rock").fallback,true);
+assert.match(genreOutcome(10,0,0,"Indie Rock").note,/No verified/);
+assert.match(genreOutcome(10,0,10,"Indie Rock").note,/data is unavailable/);
+assert.match(genreOutcome(10,0,3,"Indie Rock").note,/3 artists could not be checked/);
+assert.doesNotMatch(genreOutcome(0,0,0,"Indie Rock").note,/data is unavailable/);
+console.log("Genre label and unavailable/no-match fallback checks passed.");
