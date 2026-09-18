@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import {parseCount,parseSearch,parseArtist,music} from "../lib/youtube-music.ts";
+assert.equal(parseCount("263M monthly audience"),263000000);
+assert.equal(parseCount("3.68M"),3680000);
+assert.equal(parseCount("10.9K subscribers"),10900);
+assert.equal(parseCount("1,234"),1234);
+assert.equal(parseCount("0 monthly audience"),0);
+assert.equal(parseCount("Not available"),null);
+const artistId="UCabcdefghijklmnopqrstuv";
+const endpoint={browseId:artistId,browseEndpointContextSupportedConfigs:{browseEndpointContextMusicConfig:{pageType:"MUSIC_PAGE_TYPE_ARTIST"}}};
+const row={navigationEndpoint:{browseEndpoint:endpoint},title:{runs:[{text:"Test Artist"}]},subtitle:{runs:[{text:"1.2M monthly audience"}]}};
+const fixture={header:{musicImmersiveHeaderRenderer:{title:{runs:[{text:"Seed"}]}}},contents:[{musicCarouselShelfRenderer:{header:{musicCarouselShelfBasicHeaderRenderer:{title:{runs:[{text:"Fans might also like"}]}}},contents:[{musicTwoRowItemRenderer:row}]}}]};
+const result=parseArtist(fixture,"UCzzzzzzzzzzzzzzzzzzzzzz");
+assert.equal(result.related.length,1);
+assert.equal(result.related[0].audience,1200000);
+assert.equal(result.artist.audience,null);
+assert.equal(parseSearch({items:[{musicResponsiveListItemRenderer:row}]}).artists.length,1);
+assert.equal(parseSearch({items:[{musicResponsiveListItemRenderer:{...row,navigationEndpoint:{browseEndpoint:{...endpoint,browseEndpointContextSupportedConfigs:{browseEndpointContextMusicConfig:{pageType:"MUSIC_PAGE_TYPE_ALBUM"}}}}}}]}).artists.length,0);
+await assert.rejects(music("artist","https://example.com"),/ID/);
+await assert.rejects(music("search",""),/1~100/);
+console.log("PASS: count units, missing data, artist-only filtering, related section, input and ID validation.");
+
