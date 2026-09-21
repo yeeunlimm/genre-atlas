@@ -7,7 +7,7 @@ const labels: Record<string, string> = {
   "신스팝":"Synth-Pop", "신스 팝":"Synth-Pop", "드림 팝":"Dream Pop",
   "브릿팝":"Britpop", "포스트 록":"Post-Rock", "록 음악":"Rock", "록":"Rock",
   "팝 음악":"Pop", "팝":"Pop", "힙합":"Hip-Hop", "힙합 음악":"Hip-Hop",
-  "트랩":"Trap", "얼터너티브 힙합":"Alternative Hip-Hop", "클라우드 랩":"Cloud Rap",
+  "트랩":"Trap", "트랩(음악)":"Trap", "힙합(음악)":"Hip-Hop", "남부 힙합":"Southern Hip-Hop", "서부 힙합":"West Coast Hip-Hop", "동부 힙합":"East Coast Hip-Hop", "얼터너티브 힙합":"Alternative Hip-Hop", "클라우드 랩":"Cloud Rap",
   "재즈":"Jazz", "솔 음악":"Soul", "소울":"Soul", "리듬 앤 블루스":"R&B",
   "컨템퍼러리 R&B":"Contemporary R&B", "얼터너티브 R&B":"Alternative R&B",
   "펑크 록":"Punk Rock", "디스코":"Disco", "누 디스코":"Nu-Disco", "댄스 팝":"Dance-Pop",

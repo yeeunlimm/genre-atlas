@@ -33,40 +33,55 @@ export function parseDocument(html:string,requested:string,kind:string){
  const categories=$('a[href*="/w/"]').filter((_,el)=>/\/w\/(?:%EB%B6%84%EB%A5%98|분류)(?:%3A|:)/i.test($(el).attr("href")||"")).text();
  const labels=$("tr").map((_,row)=>$(row).children("td,th").first().text().trim()).get();
  const album=labels.some(x=>/^(발매일|발매|녹음|재생 시간|러닝타임|트랙)$/.test(x))&&!labels.some(x=>/^(데뷔|결성|멤버|구성원|출생|본명)$/.test(x));
- const musician=!album&&(/가수|밴드|싱어송라이터|래퍼|음악가|음악 그룹|보이그룹|걸그룹|록 그룹|힙합 크루/.test(categories)||(genres.length>0&&labels.some(x=>/^(데뷔|결성|멤버|구성원|출생|본명)$/.test(x))));
+ const identity=labels.some(x=>/^(데뷔|결성|멤버|구성원|출생|본명)$/.test(x));
+ const musician=!album&&identity&&(/가수|밴드|싱어송라이터|래퍼|음악가|음악 그룹|보이그룹|걸그룹|록 그룹|힙합 크루/.test(categories)||genres.length>0);
  if(kind==="artist")return {name:title,title,genres,stars,checkedAt,isMusician:musician};
- const out:Link[]=[];
- const add=(items:Link[])=>{for(const x of items)if(x.title!==title&&!out.some(y=>x.title===y.title))out.push(x);};
- // Genre history navboxes commonly list "genre : artists" in one leaf paragraph.
- $(".wiki-paragraph").each((_,el)=>{
-  const p=$(el);if(p.find(".wiki-paragraph").length)return;
-  const text=p.text().replace(/\s+/g," ").trim(),items=links($,p);
-  if((text.startsWith(title+" :")||text.startsWith(title+":")||text.startsWith(requested+" :"))&&items.length>1)add(items.filter(x=>x.title!==requested));
- });
- let explicit=out.length>0;
- if(!out.length){
-  // Only an explicitly labelled artist section; do not promote every link to a musician.
-  const headings=$("h2,h3,h4,h5,h6").toArray();
-  for(let i=0;i<headings.length;i++){
-   const heading=$(headings[i]);if(!/(관련|대표|주요)?\s*(뮤지션|아티스트|음악가|가수|밴드)(\s*목록)?/.test(heading.text()))continue;
-   const level=Number(headings[i].tagName.slice(1));
-   let node=heading.next();while(node.length){
-    const tag=node[0].type==="tag"?node[0].tagName:"";
-    if(/^h[2-6]$/.test(tag)&&Number(tag.slice(1))<=level)break;
-    node.find("li").each((_,li)=>add(links($,$(li)).slice(0,1)));node=node.next();
+ const out:(Link&{evidence:"list"|"tag"})[]=[];
+ const add=(items:Link[],evidence:"list"|"tag")=>{for(const x of items){
+  if(x.title===title)continue;const found=out.find(y=>y.title===x.title);
+  if(found){if(evidence==="list")found.evidence="list";}else out.push({...x,evidence});
+ }};
+ const directory=title.includes("/")&&/(래퍼|뮤지션|음악가|가수|밴드)/.test(title.split("/").at(-1)||"");
+ let sectionLevel=directory?1:0;
+ // Walk document order, not heading siblings: NamuWiki wraps headings in containers.
+ $("h2,h3,h4,h5,h6,li,.wiki-paragraph").each((_,el)=>{
+  const node=$(el),tag=el.tagName;
+  if(/^h[2-6]$/.test(tag)){
+   const level=Number(tag[1]);
+   if(!directory){
+    if(/(뮤지션|아티스트|음악가|가수|밴드|래퍼)/.test(node.text()))sectionLevel=level;
+    else if(sectionLevel&&level<=sectionLevel)sectionLevel=0;
+   }
+   return;
+  }
+  if(node.find("h2,h3,h4,h5,h6").length||node.closest("nav").length)return;
+  if(sectionLevel){
+   if(tag==="li"){
+    const own=node.clone();own.find("ul,ol").remove();
+    add(links($,own).slice(0,1),"list");
+   }else if(!node.closest("li,table").length&&!node.find(".wiki-paragraph,li").length){
+    add(links($,node),"list");
    }
   }
-  explicit=out.length>0;
- }
+ });
+ // Explicit genre rows in music-history tables.
+ $(".wiki-paragraph").each((_,el)=>{
+  const p=$(el);if(p.find(".wiki-paragraph").length)return;
+  const text=p.text().replace(/\s+/g," ").trim();
+  if(text.startsWith(title+" :")||text.startsWith(title+":")||text.startsWith(requested+" :"))
+   add(links($,p).filter(x=>x.title!==requested),"list");
+ });
+ // Prefer documented artist lists. Otherwise verify genre tags on body-linked artists.
  if(!out.length){
-  // Fall back to body links, but the caller must verify each artist's exact genre.
   let started=false;
   $("h2,h3,.wiki-paragraph").each((_,el)=>{
    const p=$(el);if(/^h/.test(el.tagName)&&/개요/.test(p.text()))started=true;
-   if(started&&!p.closest("table").length&&!p.find(".wiki-paragraph").length)add(links($,p));
+   if(started&&!p.closest("table").length&&!p.find(".wiki-paragraph").length)add(links($,p),"tag");
   });
  }
- return {name:title,title,artists:out.slice(0,80),explicit,checkedAt};
+ const rootTitle=title.split(/[(/]/)[0];
+ const artistPages=links($,$("body")).filter(x=>x.title.startsWith(rootTitle+"/")&&/(래퍼|뮤지션|음악가|가수|밴드)/.test(x.title.slice(rootTitle.length+1))).slice(0,2);
+ return {name:title,title,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
 }
 async function fetchDocument(title:string,search=false){
  let current=search?"https://namu.wiki/Search?q="+encodeURIComponent(title):"https://namu.wiki/w/"+encodeURIComponent(title);
