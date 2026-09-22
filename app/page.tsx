@@ -3,6 +3,7 @@ import {useState,useRef,useEffect,useCallback} from "react";
 import {Search,ArrowUpRight,ArrowRight,LoaderCircle,Users,RotateCcw,Play} from "lucide-react";
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from "@/components/ui/sheet";
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
+import {AlbumWall} from "@/components/album-wall";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
 type AlbumArtwork={title:string;imageUrl:string};
 type Artist={albumArtwork?:AlbumArtwork;wiki?:GenreArtist;id:string;name:string;audience:number|null;audienceLabel:string;url:string;checkedAt:string;subscribers?:number|null};
@@ -81,10 +82,10 @@ export default function Home(){
  <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a></header>
  <div className="workspace">
  <section className="search-deck" aria-label="Artist discovery">
+ <AlbumWall/>
  <div className="search-main"><h1>DISCOVER</h1>
  <form className="search-form" onSubmit={e=>{e.preventDefault();void search(query);}}><Search size={21}/><label className="sr-only" htmlFor="artist-search">Artist name</label><input id="artist-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search an artist" maxLength={100}/><button className="primary" type="submit" aria-label="Search artists">Search <ArrowRight size={18}/></button></form>
  <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","A$AP Rocky","Kanye West"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
- <img className="deck-art" src="/reference/cd-collection.png" alt="A collection of handwritten CDs"/>
  </section>
  {error&&<div className="message error" role="alert">{error}<button onClick={()=>void search(query)}>Try again</button></div>}
  {candidates.length>0&&<section className="candidate-results" aria-label="Artist search results"><h2>SELECT ARTIST</h2><div>{candidates.map(a=><button key={a.id} onClick={()=>void selectArtist(a)}><b>{englishText(a.name,"Artist")}</b><span>{compact(a.audience)} monthly audience</span><ArrowRight size={17}/></button>)}</div></section>}
