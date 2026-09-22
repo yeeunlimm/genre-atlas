@@ -5,7 +5,7 @@ import {parseDocument} from "../lib/namu.ts";
 
 // Transpile the server module for Node without altering the app's bundler imports.
 const source=await readFile(new URL("../lib/genre-discovery.ts",import.meta.url),"utf8");
-const code=ts.transpileModule(source.replace('"./namu"',JSON.stringify(new URL("../lib/namu.ts",import.meta.url).href)),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const code=ts.transpileModule(source.replace('"./namu"',JSON.stringify(new URL("../lib/namu.ts",import.meta.url).href)).replace('"./english-display"',JSON.stringify(new URL("../lib/english-display.ts",import.meta.url).href)),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {verifyGenreArtist,discoverGenre}=await import("data:text/javascript;base64,"+Buffer.from(code).toString("base64"));
 const link=(title)=>'<a class="wiki-link-internal" href="/w/'+encodeURIComponent(title)+'">'+title+'</a>';
 const page=(title,body)=>'<html><head><title>'+title+' - 나무위키</title></head><body>'+body+'</body></html>';
@@ -17,6 +17,10 @@ assert.equal(parseDocument(bio("Album","Rock").replace("본명","발매일"),"Al
 assert.equal(parseDocument(bio("Artist","Rock"),"Artist","artist").isMusician,true);
 const candidate={name:"Artist",title:"Artist",sourceTitle:"Rock",evidence:"tag"};
 const doc={name:"Artist",title:"Artist",isMusician:true,genres:[{title:"Rock",name:"Rock"}],stars:null,checkedAt:"2026-09-21"};
+for(const [english,korean] of [["2Pac","투팍 샤커"],["50 Cent","50 센트"],["Ace Hood","에이스 후드"]]){
+ const result=verifyGenreArtist({...candidate,name:english,evidence:"list"},{...doc,name:korean,title:korean,englishName:null},["Rock"]);
+ assert.equal(result.name,english);assert.equal(result.title,korean);
+}
 assert.equal(verifyGenreArtist(candidate,doc,["Jazz"]),null);
 assert.equal(verifyGenreArtist(candidate,doc,["Rock"]).stars,null);
 assert.equal(verifyGenreArtist({...candidate,evidence:"list"},doc,["Jazz"]).title,"Artist");

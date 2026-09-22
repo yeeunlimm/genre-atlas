@@ -1,4 +1,5 @@
 export type Genre = {name: string; title: string};
+import {englishText} from "./english-display";
 const labels: Record<string, string> = {
   "사이키델릭 록":"Psychedelic Rock", "사이키델릭 팝":"Psychedelic Pop",
   "네오 사이키델리아":"Neo-Psychedelia", "인디 록":"Indie Rock", "인디 팝":"Indie Pop",
@@ -14,9 +15,17 @@ const labels: Record<string, string> = {
   "발라드":"Ballad", "포크 음악":"Folk", "포크":"Folk", "포크 록":"Folk Rock",
   "슈게이징":"Shoegaze", "앰비언트":"Ambient", "트립합":"Trip-Hop",
   "하우스 음악":"House", "하우스":"House", "일렉트로팝":"Electropop", "케이팝":"K-Pop",
+  "슈게이즈":"Shoegaze", "그런지":"Grunge", "펑크":"Funk", "포스트 펑크":"Post-Punk",
+  "하드 록":"Hard Rock", "하드록":"Hard Rock", "헤비메탈":"Heavy Metal", "블루스":"Blues",
+  "블루스 록":"Blues Rock", "컨트리":"Country", "컨트리 음악":"Country",
+  "레게":"Reggae", "스카":"Ska", "덥스텝":"Dubstep", "테크노":"Techno",
+  "드럼 앤 베이스":"Drum and Bass", "클래식 음악":"Classical", "클래식":"Classical",
+  "가스펠":"Gospel", "트로트":"Trot", "국악":"Korean Traditional Music",
+  "얼터너티브 팝":"Alternative Pop", "팝 록":"Pop Rock", "팝 펑크":"Pop Punk",
+  "랩 록":"Rap Rock", "랩 메탈":"Rap Metal", "뉴 메탈":"Nu Metal", "네오 소울":"Neo-Soul",
 };
 // Translate display labels only; source titles still drive exact genre matching.
-export function genreLabel(g: Genre) { return labels[g.name] || labels[g.title] || g.name; }
+export function genreLabel(g: Genre) { return labels[g.name] || labels[g.title] || englishText(g.name,"Genre"); }
 export function genreOutcome(total: number, matched: number, unknown: number, label: string) {
   if (matched > 0) return {
     fallback: false,

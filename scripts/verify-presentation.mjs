@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import {parseDocument} from "../lib/namu.ts";
 import {parseArtist} from "../lib/youtube-music.ts";
 import {youtubeSearchUrl} from "../lib/listen-link.ts";
+import {englishText,hasKorean} from "../lib/english-display.ts";
+for(const raw of ["새로운 가수","한글 앨범 (Live)","ㄱㅏ", "50 센트", "에이스 후드", "장르명"]){
+ assert.equal(hasKorean(englishText(raw)),false,raw);
+ assert.ok(englishText(raw).length>0);
+}
+assert.equal(englishText("A$AP Rocky"),"A$AP Rocky");
+assert.equal(englishText("Beyoncé"),"Beyoncé");
 const profile=(heading)=>'<title>테스트 밴드 - 나무위키</title><table><tr><td colspan="2"><div class="wiki-paragraph">'+heading+'</div></td></tr><tr><td>장르</td><td><a class="wiki-link-internal" href="/w/Rock">Rock</a></td></tr><tr><td>결성</td><td>2000</td></tr></table>';
 for(const heading of ["테스트 밴드<br>Test Band","Test Band<br>테스트 밴드"]){
  const doc=parseDocument(profile(heading),"테스트 밴드","artist");

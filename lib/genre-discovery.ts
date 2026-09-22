@@ -1,4 +1,5 @@
 import {getNamu,validTitle} from "./namu";
+import {englishText,isLatinName} from "./english-display";
 
 type Link={name:string;title:string};
 type Candidate=Link&{evidence:"list"|"tag";sourceTitle:string};
@@ -14,7 +15,8 @@ const BATCH=20;
 export function verifyGenreArtist(candidate:Candidate,doc:ArtistDocument,genreTitles:string[]):GenreArtist|null {
  if(!doc.isMusician)return null;
  if(candidate.evidence!=="list"&&!doc.genres.some(g=>genreTitles.includes(g.title)||genreTitles.includes(g.name)))return null;
- return {id:doc.title,name:doc.englishName||doc.name||candidate.name,title:doc.title,stars:doc.stars,url:sourceUrl(doc.title),sourceUrl:sourceUrl(candidate.sourceTitle),evidence:candidate.evidence,checkedAt:doc.checkedAt};
+ const name=isLatinName(candidate.name)?candidate.name:doc.englishName||doc.name||candidate.name;
+ return {id:doc.title,name:englishText(name,"Artist"),title:doc.title,stars:doc.stars,url:sourceUrl(doc.title),sourceUrl:sourceUrl(candidate.sourceTitle),evidence:candidate.evidence,checkedAt:doc.checkedAt};
 }
 
 // The input is a genre document only. No seed artist or YouTube recommendations enter this query.
