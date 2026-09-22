@@ -3,7 +3,7 @@ import {getNamu,validTitle} from "./namu";
 type Link={name:string;title:string};
 type Candidate=Link&{evidence:"list"|"tag";sourceTitle:string};
 type GenreDocument=Link&{artists:(Link&{evidence:"list"|"tag"})[];artistPages?:Link[];totalLinks:number;truncated:boolean;checkedAt:string};
-type ArtistDocument=Link&{genres:Link[];stars:number|null;isMusician:boolean;checkedAt:string};
+type ArtistDocument=Link&{englishName?:string|null;genres:Link[];stars:number|null;isMusician:boolean;checkedAt:string};
 export type GenreArtist=Link&{id:string;stars:number|null;url:string;sourceUrl:string;evidence:"list"|"tag";checkedAt:string};
 export type GenrePage={genre:Link;artists:GenreArtist[];totalCandidates:number;checked:number;unavailable:number;excluded:number;nextOffset:number|null;sourceUrl:string;sourceLimited:boolean;checkedAt:string};
 const sourceUrl=(title:string)=>"https://namu.wiki/w/"+encodeURIComponent(title);
@@ -14,7 +14,7 @@ const BATCH=20;
 export function verifyGenreArtist(candidate:Candidate,doc:ArtistDocument,genreTitles:string[]):GenreArtist|null {
  if(!doc.isMusician)return null;
  if(candidate.evidence!=="list"&&!doc.genres.some(g=>genreTitles.includes(g.title)||genreTitles.includes(g.name)))return null;
- return {id:doc.title,name:candidate.name,title:doc.title,stars:doc.stars,url:sourceUrl(doc.title),sourceUrl:sourceUrl(candidate.sourceTitle),evidence:candidate.evidence,checkedAt:doc.checkedAt};
+ return {id:doc.title,name:doc.englishName||doc.name||candidate.name,title:doc.title,stars:doc.stars,url:sourceUrl(doc.title),sourceUrl:sourceUrl(candidate.sourceTitle),evidence:candidate.evidence,checkedAt:doc.checkedAt};
 }
 
 // The input is a genre document only. No seed artist or YouTube recommendations enter this query.

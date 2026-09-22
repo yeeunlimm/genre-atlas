@@ -1,5 +1,6 @@
 type Raw=Record<string,any>;
-export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string};
+export type AlbumArtwork={title:string;imageUrl:string};
+export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork};
 const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
 const cache=new Map<string,{expires:number;data:unknown}>();
 const jobs=new Map<string,Promise<unknown>>();
@@ -37,6 +38,18 @@ export function parseArtist(data:Raw,id:string){
  const related:MusicArtist[]=[];
  for(const shelf of find(data,"musicCarouselShelfRenderer")){
   const title=text(shelf.header?.musicCarouselShelfBasicHeaderRenderer?.title);
+  if(/^Albums$/i.test(title)&&!artist.albumArtwork){
+   for(const item of shelf.contents||[]){
+    const row=item.musicTwoRowItemRenderer,endpoint=row?.navigationEndpoint?.browseEndpoint;
+    if(endpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType!=="MUSIC_PAGE_TYPE_ALBUM")continue;
+    const albumTitle=text(row.title);
+    const thumbnails=find(row.thumbnailRenderer,"musicThumbnailRenderer").flatMap(x=>x.thumbnail?.thumbnails||[]);
+    const image=thumbnails.filter(x=>{
+     try{const u=new URL(x.url);return u.protocol==="https:"&&!u.username&&!u.password&&/^(?:[a-z0-9-]+\.)*(?:googleusercontent\.com|ytimg\.com)$/.test(u.hostname);}catch{return false;}
+    }).sort((a,b)=>(b.width||0)-(a.width||0))[0];
+    if(albumTitle&&image){artist.albumArtwork={title:albumTitle,imageUrl:image.url};break;}
+   }
+  }
   if(!/Fans might also like|Similar artists|Related artists/i.test(title))continue;
   for(const row of shelf.contents||[]){const a=artistRow(row.musicTwoRowItemRenderer||{});if(a&&a.id!==id&&!related.some(x=>x.id===a.id))related.push(a);}
  }

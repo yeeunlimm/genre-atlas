@@ -35,7 +35,27 @@ export function parseDocument(html:string,requested:string,kind:string){
  const album=labels.some(x=>/^(발매일|발매|녹음|재생 시간|러닝타임|트랙)$/.test(x))&&!labels.some(x=>/^(데뷔|결성|멤버|구성원|출생|본명)$/.test(x));
  const identity=labels.some(x=>/^(데뷔|결성|멤버|구성원|출생|본명)$/.test(x));
  const musician=!album&&identity&&(/가수|밴드|싱어송라이터|래퍼|음악가|음악 그룹|보이그룹|걸그룹|록 그룹|힙합 크루/.test(categories)||genres.length>0);
- if(kind==="artist")return {name:title,title,genres,stars,checkedAt,isMusician:musician};
+ // Read the artist's bilingual profile heading, never translate names or use
+ // unrelated Latin text (album titles, members, labels) elsewhere in the page.
+ let englishName:string|null=null;
+ const shortTitle=title.replace(/\([^()]*\)$/,"").trim();
+ const latinName=(value:string)=>/[A-Za-z]/.test(value)&&value.length<=100&&!/[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\n\r]/u.test(value);
+ if(latinName(shortTitle))englishName=shortTitle;
+ if(!englishName&&musician){
+  const profileRows=$("tr").filter((_,row)=>/^(음악\s*)?장르$/.test($(row).children("td,th").first().text().trim()));
+  profileRows.each((_,row)=>{
+   $(row).closest("table").find(".wiki-paragraph").each((_,el)=>{
+    if(englishName)return;
+    const node=$(el);if(node.find(".wiki-paragraph").length)return;
+    const heading=node.clone();heading.find("sup,.wiki-fn-content,.wiki-fn-link").remove();heading.find("br").replaceWith("\n");
+    const value=heading.text().trim();
+    if(value.length>200)return;
+    const alias=value.startsWith(shortTitle)?value.slice(shortTitle.length).replace(/^[\s|·:]+/,"").trim():value.endsWith(shortTitle)?value.slice(0,-shortTitle.length).replace(/[\s|·:]+$/,"").trim():"";
+    if(latinName(alias))englishName=alias;
+   });
+  });
+ }
+ if(kind==="artist")return {name:englishName||title,title,englishName,genres,stars,checkedAt,isMusician:musician};
  const out:(Link&{evidence:"list"|"tag"})[]=[];
  const add=(items:Link[],evidence:"list"|"tag")=>{for(const x of items){
   if(x.title===title)continue;const found=out.find(y=>y.title===x.title);
