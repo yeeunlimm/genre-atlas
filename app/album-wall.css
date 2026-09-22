@@ -1,9 +1,9 @@
 /* Uncropped artwork with a subtle monochrome treatment and full-colour detail. */
-.search-deck{display:flex;flex-direction:column;gap:30px;align-items:stretch}
-.album-wall{order:-1;min-width:0;width:100%}
+.search-deck{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:center}
+.album-wall{min-width:0;width:100%;max-width:540px;justify-self:end}
 .album-wall-heading{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font:10px/1.5 monospace;letter-spacing:1px;color:#a8a8b2}
 .album-wall-heading>span:last-child{font-size:9px;letter-spacing:.3px}
-.album-wall-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:980px;margin-inline:auto}
+.album-wall-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-inline:auto}
 .album-tile{position:relative;display:block;min-width:0;aspect-ratio:1;border:0;padding:0;border-radius:0;background:#232326;cursor:zoom-in;isolation:isolate}
 .album-cover{display:block;width:100%;height:100%;aspect-ratio:1;object-fit:contain;filter:grayscale(.38) saturate(.82);transition:filter .2s ease}
 .album-tile:hover .album-cover,.album-tile:focus-visible .album-cover{filter:grayscale(0) saturate(1)}
@@ -18,5 +18,5 @@
 .album-dialog [data-slot=dialog-close]{top:4px;right:7px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
 .album-credit{width:fit-content;min-height:44px;display:flex;align-items:center;font-size:12px;color:#a8a8b2;text-decoration:underline;text-underline-offset:4px}
 @media(max-width:1050px){.search-deck{gap:24px}.album-wall-heading{margin-bottom:8px}}
-@media(max-width:640px){.search-deck{display:flex;gap:22px}.album-wall-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.album-wall-heading{font-size:9px}.album-wall-heading>span:last-child{font-size:8px}.album-dialog{padding:50px 18px 18px}.album-dialog [data-slot=dialog-title]{font-size:20px}}
+@media(max-width:640px){.search-deck{grid-template-columns:minmax(0,1fr);gap:22px}.album-wall{max-width:none}.album-wall-grid{gap:4px}.album-wall-heading{font-size:9px}.album-wall-heading>span:last-child{font-size:8px}.album-dialog{padding:50px 18px 18px}.album-dialog [data-slot=dialog-title]{font-size:20px}}
 @media(prefers-reduced-motion:reduce){.album-cover{transition:none}}

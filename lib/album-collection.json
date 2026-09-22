@@ -32,6 +32,13 @@
       "verified": true
     },
     {
+      "artist": "Future",
+      "title": "High Off Life",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/64/ce/3f/64ce3f2a-b523-8f83-46fc-ef70b6ea48ff/886448469704.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/high-off-life/1513388867",
+      "verified": true
+    },
+    {
       "artist": "Kanye West",
       "title": "Graduation",
       "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/39/25/2d/39252d65-2d50-b991-0962-f7a98a761271/00602517483507.rgb.jpg/600x600bf-60.jpg",
@@ -81,6 +88,13 @@
       "verified": true
     },
     {
+      "artist": "Jack Harlow",
+      "title": "Monica",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/66/b3/a8/66b3a8d4-10ba-ea70-37ff-b1e73ab22431/075679586377.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/monica/1878823462",
+      "verified": true
+    },
+    {
       "artist": "mgk",
       "title": "Tickets To My Downfall",
       "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/36/05/c3/3605c3be-9d24-613b-3839-bf1b53670acf/20UMGIM66016.rgb.jpg/600x600bf-60.jpg",
@@ -120,6 +134,13 @@
       "title": "Whole Lotta Red",
       "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ba/1e/05/ba1e058e-5637-e53c-563c-f5b9a1a6c344/20UM1IM18331.rgb.jpg/600x600bf-60.jpg",
       "sourceUrl": "https://music.apple.com/us/album/whole-lotta-red/1546163603",
+      "verified": true
+    },
+    {
+      "artist": "JID",
+      "title": "God Does Like Ugly",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7b/e1/66/7be166a3-92e6-c505-0802-9599973629ea/25UMGIM55109.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/god-does-like-ugly/1812517697",
       "verified": true
     },
     {
