@@ -5,7 +5,7 @@
 .album-wall-heading>span:last-child{font-size:9px;letter-spacing:.3px}
 .album-wall-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;margin-inline:auto}
 .album-tile{position:relative;display:block;min-width:0;aspect-ratio:1;border:0;padding:0;border-radius:0;background:#232326;cursor:zoom-in;isolation:isolate}
-.album-cover{display:block;width:100%;height:100%;aspect-ratio:1;object-fit:contain;filter:grayscale(.38) saturate(.82);transition:filter .2s ease}
+.album-cover{display:block;width:100%;height:100%;aspect-ratio:1;object-fit:contain;filter:grayscale(.68) saturate(.82);transition:filter .2s ease}
 .album-tile:hover .album-cover,.album-tile:focus-visible .album-cover{filter:grayscale(0) saturate(1)}
 .album-tile:hover,.album-tile:focus-visible{outline:2px solid #f2f2f2;outline-offset:2px;z-index:1}
 .album-cover-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1;padding:8px;font-size:11px;line-height:1.3;text-align:center;color:#e5e5eb}
