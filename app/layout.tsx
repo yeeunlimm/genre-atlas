@@ -3,6 +3,7 @@ import "./globals.css";
 import "./youtube.css";
 import "./studio.css";
 import "./album-wall.css";
+import "./cassette-collage.css";
 
 export const metadata: Metadata = {
   title: "Genre Atlas — Music Discovery",

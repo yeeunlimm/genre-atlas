@@ -4,9 +4,10 @@ import {Search,ArrowUpRight,ArrowRight,LoaderCircle,Users,RotateCcw,Play} from "
 import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from "@/components/ui/sheet";
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
 import {AlbumWall} from "@/components/album-wall";
+import {CassetteCollage} from "@/components/cassette-collage";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
 type AlbumArtwork={title:string;imageUrl:string};
-type Artist={albumArtwork?:AlbumArtwork;wiki?:GenreArtist;id:string;name:string;audience:number|null;audienceLabel:string;url:string;checkedAt:string;subscribers?:number|null};
+type Artist={albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[];wiki?:GenreArtist;id:string;name:string;audience:number|null;audienceLabel:string;url:string;checkedAt:string;subscribers?:number|null};
 import {englishText} from "@/lib/english-display";
 import {youtubeSearchUrl} from "@/lib/listen-link";
 import {genreLabel,type Genre} from "@/lib/genre-view";
@@ -90,7 +91,7 @@ export default function Home(){
  {error&&<div className="message error" role="alert">{error}<button onClick={()=>void search(query)}>Try again</button></div>}
  {candidates.length>0&&<section className="candidate-results" aria-label="Artist search results"><h2>SELECT ARTIST</h2><div>{candidates.map(a=><button key={a.id} onClick={()=>void selectArtist(a)}><b>{englishText(a.name,"Artist")}</b><span>{compact(a.audience)} monthly audience</span><ArrowRight size={17}/></button>)}</div></section>}
  <section className="explorer">
- <aside className="artist-panel"><div className="panel-kicker"><span>01 / STARTING POINT</span></div><div className="cassette-art"><img src="/reference/cassette.png" alt="Transparent cassette tape"/><span className="cassette-note">{englishText(artist?.name,"SIDE A")}</span></div><h2>{englishText(artist?.name,"SELECT ARTIST")}</h2><p className="muted">{artist?compact(artist.audience)+" monthly audience":"Your search starts here."}</p>{artist&&<a className="source-link" href={youtubeSearchUrl(artist.name)} target="_blank" rel="noreferrer">Listen on YouTube <ArrowUpRight size={14}/></a>}
+ <aside className="artist-panel"><div className="panel-kicker"><span>01 / STARTING POINT</span></div><CassetteCollage artist={artist}/><h2>{englishText(artist?.name,"SELECT ARTIST")}</h2><p className="muted">{artist?compact(artist.audience)+" monthly audience":"Your search starts here."}</p>{artist&&<a className="source-link" href={youtubeSearchUrl(artist.name)} target="_blank" rel="noreferrer">Listen on YouTube <ArrowUpRight size={14}/></a>}
  <div className="divider"/><span className="eyebrow genre-label">ARTIST RADIO</span><div className="genres"><button className={!genreMode?"genre active":"genre"} aria-pressed={!genreMode} onClick={()=>setMode("related")}>All related <span>{related.length}</span></button></div><p className="nav-description">YouTube Music recommendations</p>
  <div className="divider"/><span className="eyebrow genre-label">EXPLORE BY GENRE</span><p className="nav-description">A separate artist collection from NamuWiki</p><div className="genres">{genres.map(g=><button key={g.title} className={genreMode&&selectedGenre?.title===g.title?"genre active":"genre"} aria-pressed={genreMode&&selectedGenre?.title===g.title} onClick={()=>void exploreGenre(g)}>{genreLabel(g)}</button>)}{genreStatus&&<p className="muted small">{genreStatus}</p>}</div>
  {genreSource&&<a className="source-link genre-source" href={genreSource} target="_blank" rel="noreferrer">Source: NamuWiki <ArrowUpRight size={13}/></a>}

@@ -1,6 +1,6 @@
 type Raw=Record<string,any>;
 export type AlbumArtwork={title:string;imageUrl:string};
-export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork};
+export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
 const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
 const cache=new Map<string,{expires:number;data:unknown}>();
 const jobs=new Map<string,Promise<unknown>>();
@@ -38,8 +38,10 @@ export function parseArtist(data:Raw,id:string){
  const related:MusicArtist[]=[];
  for(const shelf of find(data,"musicCarouselShelfRenderer")){
   const title=text(shelf.header?.musicCarouselShelfBasicHeaderRenderer?.title);
-  if(/^Albums$/i.test(title)&&!artist.albumArtwork){
+  if(/^Albums$/i.test(title)){
+   const albums=artist.albumArtworks||(artist.albumArtworks=[]);
    for(const item of shelf.contents||[]){
+    if(albums.length>=4)break;
     const row=item.musicTwoRowItemRenderer,endpoint=row?.navigationEndpoint?.browseEndpoint;
     if(endpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType!=="MUSIC_PAGE_TYPE_ALBUM")continue;
     const albumTitle=text(row.title);
@@ -47,7 +49,11 @@ export function parseArtist(data:Raw,id:string){
     const image=thumbnails.filter(x=>{
      try{const u=new URL(x.url);return u.protocol==="https:"&&!u.username&&!u.password&&/^(?:[a-z0-9-]+\.)*(?:googleusercontent\.com|ytimg\.com)$/.test(u.hostname);}catch{return false;}
     }).sort((a,b)=>(b.width||0)-(a.width||0))[0];
-    if(albumTitle&&image){artist.albumArtwork={title:albumTitle,imageUrl:image.url};break;}
+    if(albumTitle&&image&&!albums.some(a=>a.title.toLowerCase()===albumTitle.toLowerCase())){
+     albums.push({title:albumTitle,imageUrl:image.url});
+     artist.albumArtwork??=albums[0];
+    }
+    if(albums.length>=4)break;
    }
   }
   if(!/Fans might also like|Similar artists|Related artists/i.test(title))continue;
