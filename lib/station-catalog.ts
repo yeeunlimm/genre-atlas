@@ -5,6 +5,7 @@ export type Source = { label: string; url: string };
 export type Credit = { person: string; name: string; role: CreditRole; source: Source; creditedAs?: string; scope?: "track" | "release" };
 export type StationTrack = {
   id: string; recordingId: string; title: string; artist: string; artistId: string;
+  primaryArtistName?: string;
   album: string; albumFamily: string; source: Source; checkedAt: string;
   genres: { name: string; scope: "track" | "album"; source: Source }[];
   credits: Credit[]; sampledArtists?: { artistId: string; name: string; source: Source }[];

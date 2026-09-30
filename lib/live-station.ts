@@ -73,7 +73,8 @@ export async function albumArtwork(artist:string,album:string){
 function parseRecording(r:Raw):StationTrack|null{
   const release=releaseFor(r),artist=artistNames(r);if(!r.id||!r.title||!artist||!release)return null;
   const s=source("recording",r.id);
-  return {id:"mb:"+r.id,recordingId:"mb:"+r.id,title:r.title,artist,artistId:r["artist-credit"]?.[0]?.artist?.id||normalize(artist),album:release.title,albumFamily:normalize(artist)+":"+albumKey(release.title),albumGroups:groups(r),source:s,checkedAt:checkedAt(),durationMs:r.length,explicitness:/\bexplicit\b/i.test(r.disambiguation||"")?"explicit":/\bclean\b/i.test(r.disambiguation||"")?"cleaned":undefined,genres:[],credits:parseCredits(r.relations||[],"recording",r.id),catalogKind:"musicbrainz",artworkReleaseId:uuid.test(release.id||"")?release.id:undefined};
+  const primaryArtistName=r["artist-credit"]?.[0]?.artist?.name||r["artist-credit"]?.[0]?.name;
+  return {id:"mb:"+r.id,recordingId:"mb:"+r.id,title:r.title,artist,primaryArtistName,artistId:r["artist-credit"]?.[0]?.artist?.id||normalize(artist),album:release.title,albumFamily:normalize(artist)+":"+albumKey(release.title),albumGroups:groups(r),source:s,checkedAt:checkedAt(),durationMs:r.length,explicitness:/\bexplicit\b/i.test(r.disambiguation||"")?"explicit":/\bclean\b/i.test(r.disambiguation||"")?"cleaned":undefined,genres:[],credits:parseCredits(r.relations||[],"recording",r.id),catalogKind:"musicbrainz",artworkReleaseId:uuid.test(release.id||"")?release.id:undefined};
 }
 export function sameSong(a:StationTrack,b:StationTrack){return a.recordingId===b.recordingId||(artistKey(a.artist)===artistKey(b.artist)&&normalize(withoutFeatures(a.title))===normalize(withoutFeatures(b.title)));}
 export function sameAlbum(a:StationTrack,b:StationTrack){return a.albumFamily===b.albumFamily||!!a.albumGroups?.some(g=>b.albumGroups?.includes(g))||(normalize(a.artist)===normalize(b.artist)&&albumKey(a.album)===albumKey(b.album));}

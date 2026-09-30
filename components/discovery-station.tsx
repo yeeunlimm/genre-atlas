@@ -2,7 +2,7 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import {Radio,Play,SkipForward,ThumbsUp,ThumbsDown,RotateCcw,Search} from "lucide-react";
 import {stationCatalog, type StationTrack} from "@/lib/station-catalog";
-import {connection,recommend,trackYouTubeUrl,type Feedback,type Recommendation} from "@/lib/discovery-station";
+import {onePerArtist,stationQueue,recommend,trackYouTubeUrl,type Feedback,type Recommendation} from "@/lib/discovery-station";
 import type {LiveStationResult} from "@/lib/live-station";
 import {StationArtwork} from "./station-artwork";
 function Evidence({row}:{row:Recommendation}) {
@@ -15,7 +15,7 @@ function Evidence({row}:{row:Recommendation}) {
   </details>;
 }
 export function DiscoveryStation() {
-  const [query,setQuery]=useState(""),[seed,setSeed]=useState<StationTrack>(),[seen,setSeen]=useState<string[]>([]);
+  const [query,setQuery]=useState(""),[seed,setSeed]=useState<StationTrack>(),[seen,setSeen]=useState<StationTrack[]>([]);
   const [feedback,setFeedback]=useState<Feedback>({}),[notice,setNotice]=useState("");
   const [matches,setMatches]=useState<StationTrack[]>([]),[rows,setRows]=useState<Recommendation[]>([]);
   const [searched,setSearched]=useState(""),[searching,setSearching]=useState(false),[loading,setLoading]=useState(false);
@@ -25,13 +25,7 @@ export function DiscoveryStation() {
   const [creditStatus,setCreditStatus]=useState<LiveStationResult["status"]>("credits-missing");
   const searchRequest=useRef<AbortController|null>(null),stationRequest=useRef<AbortController|null>(null),startingId=useRef("");
   useEffect(()=>()=>{searchRequest.current?.abort();stationRequest.current?.abort();},[]);
-  const queue=useMemo(()=>{
-    const liked=rows.filter(r=>feedback[r.track.id]==="like").map(r=>r.track);
-    return rows.filter(r=>!seen.includes(r.track.id)&&feedback[r.track.id]!=="dislike").map(r=>{
-      const boost=Math.min(1.5,liked.reduce((n,t)=>n+Math.min(1,connection(t,r.track).score/8),0));
-      return {...r,score:r.score+boost,feedbackBoost:boost>0};
-    }).sort((a,b)=>b.score-a.score);
-  },[rows,feedback,seen]);
+  const queue=useMemo(()=>stationQueue(rows,feedback,seen),[rows,feedback,seen]);
   const current=queue[0];
   async function api<T>(url:string,signal:AbortSignal):Promise<T>{const r=await fetch(url,{signal});const d=await r.json() as T & {error?:string};if(!r.ok)throw new Error(d.error||"Music lookup failed. Please retry.");return d;}
   async function search(q=query,count=40,catalog="apple"){
@@ -47,32 +41,34 @@ export function DiscoveryStation() {
     setLoading(true);setStationError("");setRetryOffset(offset);setNotice(offset?"Following more credit connections…":"Finding this recording, its credits and other releases…");
     try{
       let page=offset, d:LiveStationResult;
-      // Automatically pass batches containing only this album / unusable records.
+      // Pass batches with no new artists as well as unusable/starting-album records.
       // Keep a bound and stop on partial failures so retry does not lose a failed batch.
       for(let attempt=0;;attempt++){
         setRetryOffset(page);
         d=await api("/api/station?"+new URLSearchParams({id:startingId.current||t.id,offset:String(page)}),c.signal);
         if(c.signal.aborted)return;
-        if(d.rows.length||d.nextOffset===null||d.partial||attempt>=2)break;
-        page=d.nextOffset;setNotice("Credits found. Looking beyond your starting album…");
+        const newArtists=onePerArtist(d.rows,offset?[...rows.map(r=>r.track),...seen]:[]);
+        if(newArtists.length||d.nextOffset===null||d.partial||attempt>=2)break;
+        page=d.nextOffset;setNotice("Looking for another artist through these credits…");
       }
       setCreditStatus(d.status);
-      setSeed(d.seed);setRows(previous=>{const merged=offset?[...previous,...d.rows]:d.rows;return merged.filter((r,i)=>merged.findIndex(x=>x.track.id===r.track.id||x.track.recordingId===r.track.recordingId)===i);});
-      setNextOffset(d.nextOffset);setTotal(d.totalConnections);setNotes(d.notes);setNotice(d.rows.length?"Found "+d.rows.length+" tracks through credits and source connections.":d.nextOffset!==null?"This batch overlaps your album. Load more connections to continue.":"No documented connections were found for this version yet.");
+      setSeed(d.seed);setRows(previous=>{const merged=offset?[...previous,...d.rows]:d.rows;return onePerArtist(merged.filter((r,i)=>merged.findIndex(x=>x.track.id===r.track.id||x.track.recordingId===r.track.recordingId)===i));});
+      const added=onePerArtist(d.rows,offset?[...rows.map(r=>r.track),...seen]:[]).length;
+      setNextOffset(d.nextOffset);setTotal(d.totalConnections);setNotes(d.notes);setNotice(added?"Found "+added+" artist"+(added===1?"":"s")+" through credits. One track per artist.":d.nextOffset!==null?"No new artists in this batch. Load more connections to continue.":"No more new artists were found in these credit records.");
       if(d.partial)setStationError("Some records could not be loaded. Retry this batch to include them.");
     }catch(e){if(!c.signal.aborted){setStationError(e instanceof Error?e.message:"Credit lookup failed. Please retry.");setNotice("Live credit lookup could not finish. Your starting track is kept.");}}
     finally{if(!c.signal.aborted)setLoading(false);}
   }
-  function start(t:StationTrack){startingId.current=t.id;setSeed(t);setRows(recommend(t.id,stationCatalog));setSeen([]);setNextOffset(null);setTotal(0);setNotes([]);setCreditStatus("credits-missing");void fetchStation(t);}
+  function start(t:StationTrack){startingId.current=t.id;setSeed(t);setRows(onePerArtist(recommend(t.id,stationCatalog)));setSeen([]);setNextOffset(null);setTotal(0);setNotes([]);setCreditStatus("credits-missing");void fetchStation(t);}
   function react(value:"like"|"dislike"){
     if(!current)return;
     setFeedback(f=>({...f,[current.track.id]:value}));
-    setSeen(s=>[...s,current.track.id]);
+    setSeen(s=>[...s,current.track]);
     setNotice((value==="like"?"Liked ":"Hidden ")+current.track.title+". Next recommendation ready.");
   }
   return <section className="station" id="discovery-station" aria-labelledby="station-title">
     <header className="station-header"><div><span className="eyebrow">FOLLOW THE CREDITS</span><h2 id="station-title"><Radio size={25} aria-hidden="true"/> Discovery Station</h2></div><span className="station-stamp">LIVE CATALOG</span></header>
-    <p className="station-intro">Follow the people behind the sound. Start with a track, leave its album behind.</p>
+    <p className="station-intro">Follow the people behind the sound. Start with a track, leave its album behind. One track per artist.</p>
     <div className="station-layout">
       <div className="station-picker">
         <form onSubmit={e=>{e.preventDefault();void search();}}><label htmlFor="station-search">Find a starting track</label>
@@ -98,7 +94,7 @@ export function DiscoveryStation() {
         {current?<><article className="station-current" key={current.track.id}>
           <div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{current.track.title}</h3><p className="station-artist">{current.track.artist}</p><p className="station-meta">{current.track.album}</p>
           <div className="station-tags">{[...new Set(current.reasons.map(r=>r.label))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={current.track.id+":"+current.track.album} track={current.track} size="recommendation"/></div>
-          <div className="station-actions"><a className="primary" href={trackYouTubeUrl(current.track)} target="_blank" rel="noreferrer"><Play size={17} aria-hidden="true"/>Listen on YouTube</a><button onClick={()=>{setSeen(s=>[...s,current.track.id]);setNotice("Skipped "+current.track.title+".");}}><SkipForward size={17} aria-hidden="true"/>Next track</button></div>
+          <div className="station-actions"><a className="primary" href={trackYouTubeUrl(current.track)} target="_blank" rel="noreferrer"><Play size={17} aria-hidden="true"/>Listen on YouTube</a><button onClick={()=>{setSeen(s=>[...s,current.track]);setNotice("Skipped "+current.track.title+".");}}><SkipForward size={17} aria-hidden="true"/>Next track</button></div>
           <div className="station-feedback"><button onClick={()=>react("like")}><ThumbsUp size={16} aria-hidden="true"/>More like this</button><button onClick={()=>react("dislike")}><ThumbsDown size={16} aria-hidden="true"/>Not for me</button><button onClick={()=>start(current.track)}>Start from this track ↗</button></div>
           <Evidence row={current}/>
         </article><div className="station-upnext"><h4>IN THE QUEUE <span>{queue.length-1}</span></h4>{queue.slice(1,5).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{row.reasons[0]?.label}</span></div>)}</div></>:

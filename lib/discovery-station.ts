@@ -2,6 +2,30 @@ import type {CreditRole, Source, StationTrack} from "./station-catalog";
 export type Feedback = Record<string, "like" | "dislike">;
 export type Reason = {kind: "credit" | "sample" | "genre"; label: string; detail: string; sources: Source[]};
 export type Recommendation = {track: StationTrack; score: number; reasons: Reason[]; feedbackBoost: boolean};
+// Prefer the provider's primary artist identity. Do not split band names at '&'.
+function artistKeys(track: StationTrack): string[] {
+  const primary=track.primaryArtistName||track.artist.replace(/\s*(?:\(|\[)?\s*\b(?:feat\.?|ft\.?|featuring)\s+.*$/i,"");
+  const name=primary.toLowerCase().replaceAll("$","s").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^\p{L}\p{N}]+/gu,"");
+  const id=track.artistId?.trim().toLowerCase();
+  return [name?"name:"+name:"",id&&!/^(?:itunes:)?(?:undefined|null|unknown)$/.test(id)?"id:"+id:""].filter(Boolean);
+}
+export function onePerArtist(rows: Recommendation[], consumed: StationTrack[] = []): Recommendation[] {
+  // Union aliases first so provider IDs/names cannot bridge around the cap later.
+  const parent=new Map<string,string>();
+  function root(key:string):string {const p=parent.get(key);if(!p){parent.set(key,key);return key;}if(p===key)return key;const r=root(p);parent.set(key,r);return r;}
+  const keys=(t:StationTrack)=>{const k=artistKeys(t);return k.length?k:["track:"+t.id];};
+  for(const t of [...consumed,...rows.map(r=>r.track)]){const k=keys(t);for(const alias of k.slice(1))parent.set(root(alias),root(k[0]));}
+  const used=new Set(consumed.map(t=>root(keys(t)[0])));
+  return rows.filter(row=>{const key=root(keys(row.track)[0]);if(used.has(key))return false;used.add(key);return true;});
+}
+export function stationQueue(rows: Recommendation[], feedback: Feedback = {}, consumed: StationTrack[] = []): Recommendation[] {
+  const liked=rows.filter(r=>feedback[r.track.id]==="like").map(r=>r.track);
+  const ranked=rows.filter(r=>feedback[r.track.id]!=="dislike").map(r=>{
+    const boost=Math.min(1.5,liked.reduce((n,t)=>n+Math.min(1,connection(t,r.track).score/8),0));
+    return {...r,score:r.score+boost,feedbackBoost:boost>0};
+  }).sort((a,b)=>Number(b.reasons.some(r=>r.kind!=="genre"))-Number(a.reasons.some(r=>r.kind!=="genre"))||b.score-a.score);
+  return onePerArtist(ranked,consumed);
+}
 export function searchTracks(query: string, catalog: StationTrack[]) {
   const normalize=(text:string)=>text.toLowerCase().replaceAll("$","s").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^\p{L}\p{N}]+/gu,"");
   const terms=query.trim().split(/\s+/).map(normalize).filter(Boolean);
