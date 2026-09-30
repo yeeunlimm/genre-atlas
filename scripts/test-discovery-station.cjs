@@ -11,6 +11,8 @@ const {stationCatalog:c}=load("station-catalog");
 const {recommend,connection,searchTracks,trackYouTubeUrl}=load("discovery-station");
 assert.equal(new Set(c.map(t=>t.id)).size,c.length);
 assert.equal(searchTracks("2hollis star",c).length,4);
+assert.equal(searchTracks("asap",c)[0].id,"sundress");
+assert.equal(searchTracks("animal",c)[0].id,"rosa");
 assert.equal(searchTracks("MISSING-TRACK",c).length,0);
 for(const seed of c){
   const rows=recommend(seed.id,c);

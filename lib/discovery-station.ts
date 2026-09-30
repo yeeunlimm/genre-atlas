@@ -3,8 +3,9 @@ export type Feedback = Record<string, "like" | "dislike">;
 export type Reason = {kind: "credit" | "sample" | "genre"; label: string; detail: string; sources: Source[]};
 export type Recommendation = {track: StationTrack; score: number; reasons: Reason[]; feedbackBoost: boolean};
 export function searchTracks(query: string, catalog: StationTrack[]) {
-  const terms=query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  return catalog.filter(t=>terms.every(term=>(t.artist+" "+t.title+" "+t.album).toLocaleLowerCase().includes(term)));
+  const normalize=(text:string)=>text.toLowerCase().replaceAll("$","s").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"");
+  const terms=query.trim().split(/\s+/).map(normalize).filter(Boolean);
+  return catalog.filter(t=>terms.every(term=>normalize(t.artist+" "+t.title+" "+t.album).includes(term)));
 }
 const roles: Record<CreditRole, string> = {producer:"production",mixing:"mixing",mastering:"mastering",songwriter:"songwriting",arranger:"arrangement"};
 const weights: Record<CreditRole, number> = {producer:5,mixing:4,mastering:2,songwriter:2,arranger:4};
