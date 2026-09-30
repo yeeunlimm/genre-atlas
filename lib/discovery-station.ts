@@ -3,7 +3,7 @@ export type Feedback = Record<string, "like" | "dislike">;
 export type Reason = {kind: "credit" | "sample" | "genre"; label: string; detail: string; sources: Source[]};
 export type Recommendation = {track: StationTrack; score: number; reasons: Reason[]; feedbackBoost: boolean};
 export function searchTracks(query: string, catalog: StationTrack[]) {
-  const normalize=(text:string)=>text.toLowerCase().replaceAll("$","s").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"");
+  const normalize=(text:string)=>text.toLowerCase().replaceAll("$","s").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^\p{L}\p{N}]+/gu,"");
   const terms=query.trim().split(/\s+/).map(normalize).filter(Boolean);
   return catalog.filter(t=>terms.every(term=>normalize(t.artist+" "+t.title+" "+t.album).includes(term)));
 }
@@ -21,7 +21,7 @@ export function connection(seed: StationTrack, candidate: StationTrack) {
     score+=best.value;
     const shared=best.x.role===best.y.role;
     reasons.push({kind:"credit",label:shared ? "Shared "+roles[best.x.role] : "Connected credits",
-      detail:best.x.name+" · "+(shared?roles[best.x.role]+" on both tracks":roles[best.x.role]+" on your starting track; "+roles[best.y.role]+" here"),
+      detail:best.x.name+" · "+(shared?roles[best.x.role]+" on both tracks":roles[best.x.role]+" on your starting track; "+roles[best.y.role]+" here")+(best.x.scope==="release"||best.y.scope==="release"?". Release-level credit: applies to the linked edition, not every version.":""),
       sources:[best.x.source,best.y.source]});
   }
   for(const link of candidate.sampledArtists||[])if(link.artistId===seed.artistId){

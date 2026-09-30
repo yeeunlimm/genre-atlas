@@ -1,25 +1,56 @@
 "use client";
-import {useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {Radio,Play,SkipForward,ThumbsUp,ThumbsDown,RotateCcw,Search} from "lucide-react";
 import {stationCatalog, type StationTrack} from "@/lib/station-catalog";
-import {recommend,searchTracks,trackYouTubeUrl,type Feedback,type Recommendation} from "@/lib/discovery-station";
+import {connection,recommend,trackYouTubeUrl,type Feedback,type Recommendation} from "@/lib/discovery-station";
+import type {LiveStationResult} from "@/lib/live-station";
 function Evidence({row}:{row:Recommendation}) {
   const sources=[...new Map(row.reasons.flatMap(r=>r.sources).map(s=>[s.url,s])).values()];
   return <details className="station-evidence"><summary>Why this track?</summary>
     <ul>{row.reasons.map((r,i)=><li key={i}><b>{r.label}</b><span>{r.detail}</span></li>)}</ul>
     {row.feedbackBoost&&<p>Your likes in this session also influenced the order.</p>}
     <div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div>
-    <small>Credits checked {row.track.checkedAt}. Credits describe a connection, not a guarantee of the same sound.</small>
+    <small>Sources checked {row.track.checkedAt}. Credits describe a connection, not a guarantee of the same sound. MusicBrainz is community-maintained and may be incomplete.</small>
   </details>;
 }
 export function DiscoveryStation() {
-  const [query,setQuery]=useState(""),[seedId,setSeedId]=useState(""),[seen,setSeen]=useState<string[]>([]);
+  const [query,setQuery]=useState(""),[seed,setSeed]=useState<StationTrack>(),[seen,setSeen]=useState<string[]>([]);
   const [feedback,setFeedback]=useState<Feedback>({}),[notice,setNotice]=useState("");
-  const seed=stationCatalog.find(t=>t.id===seedId);
-  const matches=useMemo(()=>searchTracks(query,stationCatalog),[query]);
-  const queue=useMemo(()=>recommend(seedId,stationCatalog,feedback,seen),[seedId,feedback,seen]);
+  const [matches,setMatches]=useState<StationTrack[]>([]),[rows,setRows]=useState<Recommendation[]>([]);
+  const [searched,setSearched]=useState(""),[searching,setSearching]=useState(false),[loading,setLoading]=useState(false);
+  const [searchError,setSearchError]=useState(""),[stationError,setStationError]=useState(""),[searchNote,setSearchNote]=useState("");
+  const [notes,setNotes]=useState<string[]>([]),[nextOffset,setNextOffset]=useState<number|null>(null),[total,setTotal]=useState(0);
+  const [canExpand,setCanExpand]=useState(false),[limit,setLimit]=useState(40),[retryOffset,setRetryOffset]=useState(0);
+  const searchRequest=useRef<AbortController|null>(null),stationRequest=useRef<AbortController|null>(null),startingId=useRef("");
+  useEffect(()=>()=>{searchRequest.current?.abort();stationRequest.current?.abort();},[]);
+  const queue=useMemo(()=>{
+    const liked=rows.filter(r=>feedback[r.track.id]==="like").map(r=>r.track);
+    return rows.filter(r=>!seen.includes(r.track.id)&&feedback[r.track.id]!=="dislike").map(r=>{
+      const boost=Math.min(1.5,liked.reduce((n,t)=>n+Math.min(1,connection(t,r.track).score/8),0));
+      return {...r,score:r.score+boost,feedbackBoost:boost>0};
+    }).sort((a,b)=>b.score-a.score);
+  },[rows,feedback,seen]);
   const current=queue[0];
-  function start(t:StationTrack){setSeedId(t.id);setSeen([]);setQuery("");setNotice("Station started from "+t.title+".");}
+  async function api<T>(url:string,signal:AbortSignal):Promise<T>{const r=await fetch(url,{signal});const d=await r.json() as T & {error?:string};if(!r.ok)throw new Error(d.error||"Music lookup failed. Please retry.");return d;}
+  async function search(q=query,count=40,catalog="apple"){
+    if(q.trim().length<2){setSearchError("Enter at least two characters.");return;}
+    searchRequest.current?.abort();const c=new AbortController();searchRequest.current=c;
+    setSearching(true);setSearchError("");setSearchNote("");setSearched(q);setMatches([]);setCanExpand(false);setLimit(count);
+    try{const d=await api<{tracks:StationTrack[];canExpand:boolean;warning:string;provider:string}>("/api/station?"+new URLSearchParams({q:q.trim(),limit:String(count),catalog}),c.signal);if(c.signal.aborted)return;setMatches(d.tracks);setCanExpand(d.canExpand);setSearchNote(d.warning||("Results from "+d.provider+" · choose a song and album version."));}
+    catch(e){if(!c.signal.aborted)setSearchError(e instanceof Error?e.message:"Search failed. Please retry.");}
+    finally{if(!c.signal.aborted)setSearching(false);}
+  }
+  async function fetchStation(t:StationTrack,offset=0){
+    stationRequest.current?.abort();const c=new AbortController();stationRequest.current=c;
+    setLoading(true);setStationError("");setRetryOffset(offset);setNotice(offset?"Following more credit connections…":"Finding this recording, its credits and other releases…");
+    try{const d:LiveStationResult=await api("/api/station?"+new URLSearchParams({id:startingId.current||t.id,offset:String(offset)}),c.signal);if(c.signal.aborted)return;
+      setSeed(d.seed);setRows(previous=>{const merged=offset?[...previous,...d.rows]:d.rows;return merged.filter((r,i)=>merged.findIndex(x=>x.track.id===r.track.id||x.track.recordingId===r.track.recordingId)===i);});
+      setNextOffset(d.nextOffset);setTotal(d.totalConnections);setNotes(d.notes);setNotice(d.rows.length?"Found "+d.rows.length+" tracks through credits and source connections.":d.nextOffset!==null?"This batch overlaps your album. Load more connections to continue.":"No documented connections were found for this version yet.");
+      if(d.partial)setStationError("Some records could not be loaded. Retry this batch to include them.");
+    }catch(e){if(!c.signal.aborted){setStationError(e instanceof Error?e.message:"Credit lookup failed. Please retry.");setNotice("Live credit lookup could not finish. Your starting track is kept.");}}
+    finally{if(!c.signal.aborted)setLoading(false);}
+  }
+  function start(t:StationTrack){startingId.current=t.id;setSeed(t);setRows(recommend(t.id,stationCatalog));setSeen([]);setNextOffset(null);setTotal(0);setNotes([]);void fetchStation(t);}
   function react(value:"like"|"dislike"){
     if(!current)return;
     setFeedback(f=>({...f,[current.track.id]:value}));
@@ -27,33 +58,43 @@ export function DiscoveryStation() {
     setNotice((value==="like"?"Liked ":"Hidden ")+current.track.title+". Next recommendation ready.");
   }
   return <section className="station" id="discovery-station" aria-labelledby="station-title">
-    <header className="station-header"><div><span className="eyebrow">SONG DISCOVERY / BETA</span><h2 id="station-title"><Radio size={25} aria-hidden="true"/> Discovery Station</h2></div><span className="station-stamp">NO BPM FILTER</span></header>
+    <header className="station-header"><div><span className="eyebrow">FOLLOW THE CREDITS</span><h2 id="station-title"><Radio size={25} aria-hidden="true"/> Discovery Station</h2></div><span className="station-stamp">LIVE CATALOG</span></header>
     <p className="station-intro">Follow the people behind the sound. Start with a track, leave its album behind.</p>
     <div className="station-layout">
       <div className="station-picker">
-        <label htmlFor="station-search">Find a starting track</label>
-        <div className="station-search"><Search size={18} aria-hidden="true"/><input id="station-search" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Song, artist or album" maxLength={120}/></div>
-        <p className="station-meta">{stationCatalog.length} source-checked tracks · limited starter catalog</p>
-        <div className="station-seeds"><button onClick={()=>setQuery("2hollis star")}>2hollis / star</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="makgeolli-banger")!)}>MAKGEOLLI BANGER</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="rosa")!)}>Rosa</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="new-person")!)}>Tame Impala</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="skeletons")!)}>SKELETONS</button></div>
-        <div className="station-catalog" aria-label="Starting tracks">
-          {(query.trim()?matches:stationCatalog).map(t=><button key={t.id} aria-pressed={seedId===t.id} onClick={()=>start(t)}><b>{t.title}</b><span>{t.artist} · {t.album}</span></button>)}
-          {query.trim()&&!matches.length&&<p>No verified track in this catalog yet. Try a listed song or artist. This is not a live YouTube catalog search.</p>}
+        <form onSubmit={e=>{e.preventDefault();void search();}}><label htmlFor="station-search">Find a starting track</label>
+        <div className="station-search"><Search size={18} aria-hidden="true"/><input id="station-search" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Song or artist" maxLength={120} aria-describedby="station-search-help"/><button type="submit" disabled={searching}>{searching?"Searching…":"Search"}</button></div></form>
+        <p className="station-meta" id="station-search-help">Search the live catalog. No account needed. No BPM filter.</p>
+        <div className="station-seeds"><button onClick={()=>{setQuery("2hollis star");void search("2hollis star");}}>2hollis / star</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="makgeolli-banger")!)}>MAKGEOLLI BANGER</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="rosa")!)}>Rosa</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="new-person")!)}>Tame Impala</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="skeletons")!)}>SKELETONS</button></div>
+        <p role="status" className="station-meta">{searching?"Searching the external music catalog…":searchNote}</p>
+        {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
+        <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>
+          {matches.map(t=><button key={t.id} aria-pressed={seed?.id===t.id} onClick={()=>start(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":t.explicitness==="explicit"?" · Explicit":""}</span></button>)}
+          {searched&&!searching&&!searchError&&!matches.length&&<p>No songs found for “{searched}”. Try the artist and song title, or another spelling.</p>}
+          {!searched&&<p className="station-meta">Search a song or artist in the available catalog, or try a starting pick above.</p>}
         </div>
+        {canExpand&&!searching&&<button onClick={()=>void search(searched,limit===40?100:200)}>Show more search results</button>}
+        {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Search other catalog versions</button>}
       </div>
-      <div className="station-output">
+      <div className="station-output" aria-busy={loading}>
         <div className="station-status" role="status" aria-live="polite">{notice||"Choose a track to start your station."}</div>
-        {seed&&<div className="station-origin"><span>STARTING FROM</span><b>{seed.title} / {seed.artist}</b><small>Excluded album: {seed.album}</small></div>}
+        {loading&&<p className="station-meta">Checking public credit records. A first lookup can take up to a minute.</p>}
+        {stationError&&<div role="alert" className="station-error"><p>{stationError}</p><button onClick={()=>seed&&void fetchStation(seed,retryOffset)}>Retry credit lookup</button></div>}
+        {seed&&<div className="station-origin"><span>STARTING FROM</span><b>{seed.title} / {seed.artist}</b><small>Excluded album: {seed.album}</small><a className="station-meta" href={seed.source.url} target="_blank" rel="noreferrer">View catalog source ↗</a></div>}
         {current?<><article className="station-current" key={current.track.id}>
           <span className="eyebrow">NEXT DISCOVERY</span><h3>{current.track.title}</h3><p className="station-artist">{current.track.artist}</p><p className="station-meta">{current.track.album}</p>
           <div className="station-tags">{[...new Set(current.reasons.map(r=>r.label))].map(label=><span key={label}>{label}</span>)}</div>
           <div className="station-actions"><a className="primary" href={trackYouTubeUrl(current.track)} target="_blank" rel="noreferrer"><Play size={17} aria-hidden="true"/>Listen on YouTube</a><button onClick={()=>{setSeen(s=>[...s,current.track.id]);setNotice("Skipped "+current.track.title+".");}}><SkipForward size={17} aria-hidden="true"/>Next track</button></div>
-          <div className="station-feedback"><button onClick={()=>react("like")}><ThumbsUp size={16} aria-hidden="true"/>More like this</button><button onClick={()=>react("dislike")}><ThumbsDown size={16} aria-hidden="true"/>Not for me</button></div>
+          <div className="station-feedback"><button onClick={()=>react("like")}><ThumbsUp size={16} aria-hidden="true"/>More like this</button><button onClick={()=>react("dislike")}><ThumbsDown size={16} aria-hidden="true"/>Not for me</button><button onClick={()=>start(current.track)}>Start from this track ↗</button></div>
           <Evidence row={current}/>
         </article><div className="station-upnext"><h4>IN THE QUEUE <span>{queue.length-1}</span></h4>{queue.slice(1,5).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{row.reasons[0]?.label}</span></div>)}</div></>:
-        <div className="station-empty"><Radio size={42} strokeWidth={1} aria-hidden="true"/><h3>{seed?"End of verified matches":"A different way in."}</h3><p>{seed?"No more matching tracks in this starter catalog. Choose another starting track or replay this station.":"Production, mixing, mastering and sample connections — not just fans of the same artist."}</p>{seed&&<button onClick={()=>{setSeen([]);setNotice("Station replayed. Hidden tracks remain excluded.");}}>Replay station</button>}</div>}
+        <div className="station-empty"><Radio size={42} strokeWidth={1} aria-hidden="true"/><h3>{loading?"Following the people behind it…":seed?"Keep exploring.":"A different way in."}</h3><p>{seed?(loading?"Looking beyond a fixed playlist — into real participation records.":nextOffset!==null?"Load the next batch of participation records below.":"No more documented matches are available for this recording right now. Try another song or album version."):"Find a song, then discover other releases connected by the people who made it."}</p>{seed&&!loading&&rows.length>0&&<button onClick={()=>{setSeen([]);setNotice("Station replayed. Hidden tracks remain excluded.");}}>Replay station</button>}</div>}
+        {nextOffset!==null&&<button className="station-more" disabled={loading} onClick={()=>seed&&void fetchStation(seed,nextOffset)}>{loading?"Loading credits…":"Load more credit connections"}</button>}
+        {total>0&&<p className="station-meta">{total} participation records found · loaded in batches, excluding your starting album.</p>}
+        {notes.map(n=><p className="station-meta" key={n}>{n}</p>)}
       </div>
     </div>
     <footer className="station-foot"><span>Likes and hidden tracks apply only to this session. Nothing is saved to an account.</span><button onClick={()=>{setFeedback({});setSeen([]);setNotice("Session feedback cleared.");}}><RotateCcw size={15} aria-hidden="true"/>Reset feedback</button></footer>
-    <details className="station-method"><summary>How this station works</summary><p>A small, source-checked catalog — not Apple Music’s algorithm or a live YouTube Music recommendation feed. Shared production and mixing credits lead; mastering, songwriting, sample links and available genre labels add context. Roles are kept separate. Album-level genre tags are labeled in the sources. No BPM, popularity, audio analysis or listening-history data is used. Unknown fields stay unknown. The same album family and recording are excluded; queue diversity spaces out artists. “More like this” gently adjusts ranking within existing matches; “Not for me” hides only that track. Listen opens ordinary YouTube search, not automatic playback.</p></details>
+    <details className="station-method"><summary>How this station works</summary><p>Search uses Apple’s public US music catalog, with MusicBrainz as a fallback. Selecting a song looks up its recording and album in MusicBrainz, then follows production, mixing, mastering and arrangement credits to other recordings and releases. The three highest-priority credited people are explored first; more participation records load on request. Existing source-backed connections are kept. Release-level credits refer to a specific edition. The starting recording and known album groups are excluded. Credits are community-maintained: missing information is not filled in by guessing or fan similarity. No BPM, audio analysis, listening history or Apple Discovery Station algorithm is used. Catalog and credit coverage are not universal. Listen opens ordinary YouTube search.</p></details>
   </section>;
 }

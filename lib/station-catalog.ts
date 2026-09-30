@@ -2,12 +2,13 @@
 // Credits describe the listed release only; missing credits are not negative evidence.
 export type CreditRole = "producer" | "mixing" | "mastering" | "songwriter" | "arranger";
 export type Source = { label: string; url: string };
-export type Credit = { person: string; name: string; role: CreditRole; source: Source; creditedAs?: string };
+export type Credit = { person: string; name: string; role: CreditRole; source: Source; creditedAs?: string; scope?: "track" | "release" };
 export type StationTrack = {
   id: string; recordingId: string; title: string; artist: string; artistId: string;
   album: string; albumFamily: string; source: Source; checkedAt: string;
   genres: { name: string; scope: "track" | "album"; source: Source }[];
   credits: Credit[]; sampledArtists?: { artistId: string; name: string; source: Source }[];
+  durationMs?: number; albumGroups?: string[]; catalogKind?: "apple" | "musicbrainz"; explicitness?: "explicit" | "cleaned" | "notExplicit";
 };
 const src = (label: string, url: string): Source => ({label, url});
 const genie = src("Genie · official album credits", "https://www.genie.co.kr/detail/albumInfo?axnm=86563705");
