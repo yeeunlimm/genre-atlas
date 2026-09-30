@@ -6,6 +6,11 @@ function load(name){
   const m={exports:{}};new Function("exports","require","module",code)(m.exports,p=>p.startsWith("./")?load(p.slice(2)):require(p),m);return modules[name]=m.exports;
 }
 const live=load("live-station"),{stationCatalog}=load("station-catalog");
+const cover="https://is1-ssl.mzstatic.com/image/thumb/example/100x100bb.jpg";
+assert.equal(live.appleArtworkUrl(cover),cover.replace("100x100","600x600"));
+assert.equal(live.appleArtworkUrl("https://untrusted.example/cover.jpg"),undefined);
+assert.equal(live.chooseAlbumArtwork([{collectionType:"Album",artistName:"Other Artist",collectionName:"Currents",artworkUrl100:cover}],"Tame Impala","Currents"),undefined);
+assert.equal(live.chooseAlbumArtwork([{collectionType:"Album",artistName:"Tame Impala",collectionName:"Currents",artworkUrl100:cover}],"Tame Impala","Currents"),cover.replace("100x100","600x600"));
 const t=live.parseApple({kind:"song",trackId:123,artistId:7,collectionId:8,artistName:"Tame Impala",trackName:"Let It Happen",collectionName:"Currents",trackTimeMillis:466000});
 assert.equal(t.id,"itunes:123");assert.equal(t.credits.length,0);assert.equal(live.parseApple({kind:"podcast"}),null);
 assert.ok(live.sameAlbum(t,{...t,id:"other",albumFamily:"other",album:"Currents (Deluxe Edition)"}));

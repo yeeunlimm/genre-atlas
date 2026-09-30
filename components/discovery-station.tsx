@@ -4,6 +4,7 @@ import {Radio,Play,SkipForward,ThumbsUp,ThumbsDown,RotateCcw,Search} from "lucid
 import {stationCatalog, type StationTrack} from "@/lib/station-catalog";
 import {connection,recommend,trackYouTubeUrl,type Feedback,type Recommendation} from "@/lib/discovery-station";
 import type {LiveStationResult} from "@/lib/live-station";
+import {StationArtwork} from "./station-artwork";
 function Evidence({row}:{row:Recommendation}) {
   const sources=[...new Map(row.reasons.flatMap(r=>r.sources).map(s=>[s.url,s])).values()];
   return <details className="station-evidence"><summary>Why this track?</summary>
@@ -92,11 +93,11 @@ export function DiscoveryStation() {
         <div className="station-status" role="status" aria-live="polite">{notice||"Choose a track to start your station."}</div>
         {loading&&<p className="station-meta">Checking public credit records. A first lookup can take up to a minute.</p>}
         {stationError&&<div role="alert" className="station-error"><p>{stationError}</p><button onClick={()=>seed&&void fetchStation(seed,retryOffset)}>Retry credit lookup</button></div>}
-        {seed&&<div className="station-origin"><span>STARTING FROM</span><b>{seed.title} / {seed.artist}</b><small>Excluded album: {seed.album}</small><a className="station-meta" href={seed.source.url} target="_blank" rel="noreferrer">View catalog source ↗</a></div>}
+        {seed&&<div className="station-origin"><div className="station-origin-copy"><span>STARTING FROM</span><b>{seed.title} / {seed.artist}</b><small>Excluded album: {seed.album}</small><a className="station-meta" href={seed.source.url} target="_blank" rel="noreferrer">View catalog source ↗</a></div><StationArtwork key={seed.id+":"+seed.album+":"+seed.artworkUrl} track={seed} size="seed"/></div>}
         {seed&&seed.credits.length>0&&<details className="station-credit-check"><summary>Credits found · {[...new Set(seed.credits.map(c=>c.name))].length} people</summary><ul>{seed.credits.filter((c,i,a)=>a.findIndex(x=>x.name===c.name&&x.role===c.role)===i).map(c=><li key={c.person+":"+c.role}><a href={c.source.url} target="_blank" rel="noreferrer">{c.name}</a><span>{c.role}{c.scope==="release"?" · album edition":" · this track"}</span></li>)}</ul></details>}
         {current?<><article className="station-current" key={current.track.id}>
-          <span className="eyebrow">NEXT DISCOVERY</span><h3>{current.track.title}</h3><p className="station-artist">{current.track.artist}</p><p className="station-meta">{current.track.album}</p>
-          <div className="station-tags">{[...new Set(current.reasons.map(r=>r.label))].map(label=><span key={label}>{label}</span>)}</div>
+          <div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{current.track.title}</h3><p className="station-artist">{current.track.artist}</p><p className="station-meta">{current.track.album}</p>
+          <div className="station-tags">{[...new Set(current.reasons.map(r=>r.label))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={current.track.id+":"+current.track.album} track={current.track} size="recommendation"/></div>
           <div className="station-actions"><a className="primary" href={trackYouTubeUrl(current.track)} target="_blank" rel="noreferrer"><Play size={17} aria-hidden="true"/>Listen on YouTube</a><button onClick={()=>{setSeen(s=>[...s,current.track.id]);setNotice("Skipped "+current.track.title+".");}}><SkipForward size={17} aria-hidden="true"/>Next track</button></div>
           <div className="station-feedback"><button onClick={()=>react("like")}><ThumbsUp size={16} aria-hidden="true"/>More like this</button><button onClick={()=>react("dislike")}><ThumbsDown size={16} aria-hidden="true"/>Not for me</button><button onClick={()=>start(current.track)}>Start from this track ↗</button></div>
           <Evidence row={current}/>

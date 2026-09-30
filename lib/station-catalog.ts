@@ -9,6 +9,7 @@ export type StationTrack = {
   genres: { name: string; scope: "track" | "album"; source: Source }[];
   credits: Credit[]; sampledArtists?: { artistId: string; name: string; source: Source }[];
   durationMs?: number; albumGroups?: string[]; catalogKind?: "apple" | "musicbrainz"; explicitness?: "explicit" | "cleaned" | "notExplicit";
+  artworkUrl?: string; artworkReleaseId?: string;
 };
 const src = (label: string, url: string): Source => ({label, url});
 const genie = src("Genie · official album credits", "https://www.genie.co.kr/detail/albumInfo?axnm=86563705");

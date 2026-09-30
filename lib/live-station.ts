@@ -51,12 +51,29 @@ export function parseCredits(relations:Raw[],entity:"recording"|"release",id:str
 export function parseApple(row:Raw):StationTrack|null{
   if(row.kind!=="song"||!Number.isSafeInteger(row.trackId)||!row.artistName||!row.trackName||!row.collectionName)return null;
   const s={label:"Apple · catalog metadata",url:"https://music.apple.com/us/album/"+row.collectionId+"?i="+row.trackId};
-  return {id:"itunes:"+row.trackId,recordingId:"itunes:"+row.trackId,title:row.trackName,artist:row.artistName,artistId:"itunes:"+row.artistId,album:row.collectionName,albumFamily:normalize(row.artistName)+":"+albumKey(row.collectionName),durationMs:row.trackTimeMillis,explicitness:row.trackExplicitness,source:s,checkedAt:checkedAt(),genres:row.primaryGenreName?[{name:row.primaryGenreName,scope:"track",source:s}]:[],credits:[],catalogKind:"apple"};
+  return {id:"itunes:"+row.trackId,recordingId:"itunes:"+row.trackId,title:row.trackName,artist:row.artistName,artistId:"itunes:"+row.artistId,album:row.collectionName,albumFamily:normalize(row.artistName)+":"+albumKey(row.collectionName),durationMs:row.trackTimeMillis,explicitness:row.trackExplicitness,source:s,checkedAt:checkedAt(),genres:row.primaryGenreName?[{name:row.primaryGenreName,scope:"track",source:s}]:[],credits:[],catalogKind:"apple",artworkUrl:appleArtworkUrl(row.artworkUrl100)};
+}
+export function appleArtworkUrl(value:unknown):string|undefined{
+  if(typeof value!=="string")return;
+  try{const u=new URL(value);if(u.protocol!=="https:"||!u.hostname.endsWith(".mzstatic.com"))return;
+    return u.href.replace(/\/\d+x\d+bb\./,"/600x600bb.");
+  }catch{return;}
+}
+export function chooseAlbumArtwork(rows:Raw[],artist:string,album:string):string|undefined{
+  // Never show the first search hit: the album AND its artist must match.
+  const matches=rows.filter(r=>r.collectionType==="Album"&&typeof r.collectionName==="string"&&typeof r.artistName==="string"&&albumKey(r.collectionName)===albumKey(album)&&(artistKey(r.artistName)===artistKey(artist)||normalize(r.artistName)===normalize(primaryArtist(artist))));
+  matches.sort((a,b)=>Number(normalize(b.collectionName)===normalize(album))-Number(normalize(a.collectionName)===normalize(album)));
+  return matches.map(r=>appleArtworkUrl(r.artworkUrl100)).find(Boolean);
+}
+export async function albumArtwork(artist:string,album:string){
+  if(!artist.trim()||!album.trim()||artist.length>300||album.length>400)throw new StationError("Invalid album artwork request.",400);
+  const data=await apple("search?"+new URLSearchParams({term:primaryArtist(artist)+" "+album,entity:"album",media:"music",limit:"30",country:"US",lang:"en_us"}));
+  return {url:chooseAlbumArtwork(data.results||[],artist,album)||null};
 }
 function parseRecording(r:Raw):StationTrack|null{
   const release=releaseFor(r),artist=artistNames(r);if(!r.id||!r.title||!artist||!release)return null;
   const s=source("recording",r.id);
-  return {id:"mb:"+r.id,recordingId:"mb:"+r.id,title:r.title,artist,artistId:r["artist-credit"]?.[0]?.artist?.id||normalize(artist),album:release.title,albumFamily:normalize(artist)+":"+albumKey(release.title),albumGroups:groups(r),source:s,checkedAt:checkedAt(),durationMs:r.length,explicitness:/\bexplicit\b/i.test(r.disambiguation||"")?"explicit":/\bclean\b/i.test(r.disambiguation||"")?"cleaned":undefined,genres:[],credits:parseCredits(r.relations||[],"recording",r.id),catalogKind:"musicbrainz"};
+  return {id:"mb:"+r.id,recordingId:"mb:"+r.id,title:r.title,artist,artistId:r["artist-credit"]?.[0]?.artist?.id||normalize(artist),album:release.title,albumFamily:normalize(artist)+":"+albumKey(release.title),albumGroups:groups(r),source:s,checkedAt:checkedAt(),durationMs:r.length,explicitness:/\bexplicit\b/i.test(r.disambiguation||"")?"explicit":/\bclean\b/i.test(r.disambiguation||"")?"cleaned":undefined,genres:[],credits:parseCredits(r.relations||[],"recording",r.id),catalogKind:"musicbrainz",artworkReleaseId:uuid.test(release.id||"")?release.id:undefined};
 }
 export function sameSong(a:StationTrack,b:StationTrack){return a.recordingId===b.recordingId||(artistKey(a.artist)===artistKey(b.artist)&&normalize(withoutFeatures(a.title))===normalize(withoutFeatures(b.title)));}
 export function sameAlbum(a:StationTrack,b:StationTrack){return a.albumFamily===b.albumFamily||!!a.albumGroups?.some(g=>b.albumGroups?.includes(g))||(normalize(a.artist)===normalize(b.artist)&&albumKey(a.album)===albumKey(b.album));}
