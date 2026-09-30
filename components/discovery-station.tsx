@@ -80,7 +80,7 @@ export function DiscoveryStation() {
           {title:"Victory Lap",artist:"Fred again.."},
           {title:"Boy's a liar",artist:"PinkPantheress"},
           {title:"Summer Gypsy",artist:"Nujabes"},
-        ].map(pick=><button key={pick.title} onClick={()=>{const q=pick.title+" "+pick.artist;setQuery(q);void search(q);}}>{pick.title} / {pick.artist}</button>)}</div>
+        ].map(pick=><button key={pick.title} data-pick={pick.title} aria-label={pick.title+" by "+pick.artist} onClick={()=>{const q=pick.title+" "+pick.artist;setQuery(q);void search(q);}}>{pick.title}</button>)}</div>
         <p role="status" className="station-meta">{searching?"Searching the external music catalog…":searchNote}</p>
         {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
         <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>
