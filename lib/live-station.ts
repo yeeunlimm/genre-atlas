@@ -1,6 +1,7 @@
 // Public metadata only. No audio extraction, inferred credits, or BPM scoring.
 import {stationCatalog, type StationTrack, type Credit, type CreditRole} from "./station-catalog";
 import {connection, recommend, searchTracks, type Recommendation} from "./discovery-station";
+import {fetchAppleCredits} from "./apple-credits";
 
 type Raw = Record<string, any>;
 export class StationError extends Error { constructor(message: string, public status=502) {super(message);} }
@@ -103,53 +104,91 @@ async function resolveRecording(t:StationTrack){
   if(t.recordingId.startsWith("mb:")&&uuid.test(t.recordingId.slice(3)))return record(t.recordingId.slice(3));
   const query="recording:"+quote(withoutFeatures(t.title))+" AND artist:"+quote(primaryArtist(t.artist))+" AND release:"+quote(t.album.replace(/\s+-\s+(?:Single|EP)$/i,""));
   const d=await mb("recording/?query="+encodeURIComponent(query)+"&limit=30");
-  const match=chooseRecording(d.recordings||[],t);return match?record(match.id):null;
+  let match=chooseRecording(d.recordings||[],t);
+  if(!match){
+    // Relax the search query only, not recording/edition identity checks.
+    const wider=await mb("recording/?query="+encodeURIComponent("recording:"+quote(withoutFeatures(t.title))+" AND artist:"+quote(primaryArtist(t.artist)))+"&limit=50");
+    match=chooseRecording(wider.recordings||[],t);
+  }
+  return match?record(match.id):null;
 }
 type Target={id:string;kind:"recording"|"release";credit:Credit;score:number};
-type Graph={seed:StationTrack;targets:Target[];notes:string[]};
+type Graph={seed:StationTrack;targets:Target[];notes:string[];partial:boolean;status:"connected"|"credits-missing"|"connections-missing"};
+export function chooseCreditPerson(rows:Raw[],name:string):Raw|undefined{
+  const exact=rows.filter(a=>[a.name,...(a.aliases||[]).map((x:Raw)=>x.name)].some(n=>typeof n==="string"&&normalize(n)===normalize(name)));
+  // Never choose the highest fuzzy hit or merge namesakes.
+  return exact.length===1?exact[0]:undefined;
+}
+async function creditPerson(name:string){
+  const result=await mb("artist/?query="+encodeURIComponent("artist:"+quote(name)+" OR alias:"+quote(name))+"&limit=100");
+  if(result.count>100)return undefined;
+  return chooseCreditPerson(result.artists||[],name);
+}
 async function graph(id:string):Promise<Graph>{
   return cached("graph:"+id,1800_000,async()=>{
-    const original=await loadTrack(id),r=await resolveRecording(original);
-    if(!r)return {seed:original,targets:[],notes:["No confident recording-and-album match in MusicBrainz. Credits from similarly named versions were not substituted."]};
-    let credits=parseCredits(r.relations,"recording",r.id);
-    const release=releaseFor(r,original.album);
+    const original=await loadTrack(id),notes:string[]=[];
+    let partial=false;
+    const [recordingResult,appleResult]=await Promise.allSettled([resolveRecording(original),cached("apple-credits:"+id,3600_000,()=>fetchAppleCredits(original))]);
+    const r=recordingResult.status==="fulfilled"?recordingResult.value:null;
+    if(recordingResult.status==="rejected"){partial=true;notes.push("MusicBrainz recording lookup was interrupted; other credit sources were still checked.");}
+    if(appleResult.status==="rejected"){partial=true;notes.push("Apple song credits could not be read; MusicBrainz credits were still checked. Retry to check Apple again.");}
+    const appleCredits=appleResult.status==="fulfilled"?appleResult.value:[];
+    let credits=[...original.credits.map(c=>({...c})),...parseCredits(r?.relations||[],"recording",r?.id||"")];
+    const release=r?releaseFor(r,original.album):undefined;
     if(release&&albumKey(release.title)===albumKey(original.album)){
-      const full=await mb("release/"+release.id+"?inc=artist-rels");
-      credits=[...credits,...parseCredits(full.relations,"release",full.id)];
+      try{const full=await mb("release/"+release.id+"?inc=artist-rels");credits.push(...parseCredits(full.relations,"release",full.id));}
+      catch{partial=true;notes.push("Album-edition credits could not be loaded. Track credits are still available.");}
     }
-    const seedGroups=groups({releases:(r.releases||[]).filter((x:Raw)=>albumKey(x.title)===albumKey(original.album))});
-    const seed={...original,recordingId:"mb:"+r.id,albumGroups:seedGroups,credits:[...original.credits,...credits]};
-    // Keep mixing/mastering discoverable even when a track has several producers.
+    credits.push(...appleCredits.filter(a=>!credits.some(c=>normalize(c.name)===normalize(a.name)&&c.role===a.role)).map(c=>({...c})));
+    const seedGroups=groups({releases:(r?.releases||[]).filter((x:Raw)=>albumKey(x.title)===albumKey(original.album))});
+    const seed={...original,recordingId:r?"mb:"+r.id:original.recordingId,albumGroups:seedGroups,credits};
     const roles:CreditRole[]=["producer","mixing","mastering","arranger","songwriter"];
     const people=[...new Set([...roles.map(role=>credits.find(c=>c.role===role)?.person).filter((p):p is string=>!!p),...credits.map(c=>c.person)])];
-    const targets:Target[]=[];const notes:string[]=[];
-    // Bound requests, not the searchable catalog. Additional people can be explored from subsequent seeds.
-    for(const person of people.slice(0,3)){
-      const a=await mb("artist/"+person.slice(3)+"?inc=recording-rels+release-rels");
+    const targets:Target[]=[];
+    let followed=0;const visited=new Set<string>();
+    // Missing/ambiguous first names must not prevent following the remaining people.
+    for(const person of people.slice(0,8)){
+      if(followed>=3)break;
       const seedRoles=credits.filter(c=>c.person===person);
-      for(const rel of a.relations||[]){
-        const role=roleMap[rel.type],kind=rel.recording?"recording":rel.release?"release":null;
-        if(!role||!kind||(rel.attributes||[]).includes("additional"))continue;
-        const target=rel[kind];if(target.id===r.id||target.id===release?.id)continue;
-        const credit:Credit={person,name:a.name,role,scope:kind==="release"?"release":"track",source:source(kind,target.id)};
-        const score=Math.max(...seedRoles.map(c=>c.role===role?weight[role]:Math.min(weight[c.role],weight[role])*.7));
-        targets.push({id:target.id,kind,credit,score});
-      }
+      if(!seedRoles.length)continue;
+      let personId=person.startsWith("mb:")?person.slice(3):undefined;
+      try{
+        if(!personId){
+          const found=await creditPerson(seedRoles[0].name);
+          if(!found)continue;
+          personId=found.id as string;
+          for(const credit of seedRoles)credit.person="mb:"+personId;
+        }
+        if(visited.has(personId))continue;visited.add(personId);
+        const a=await mb("artist/"+personId+"?inc=recording-rels+release-rels");
+        let foundTargets=0;
+        for(const rel of a.relations||[]){
+          const role=roleMap[rel.type],kind=rel.recording?"recording":rel.release?"release":null;
+          if(!role||!kind||(rel.attributes||[]).includes("additional"))continue;
+          const target=rel[kind];if(target.id===r?.id||target.id===release?.id)continue;
+          const credit:Credit={person:"mb:"+personId,name:a.name,role,scope:kind==="release"?"release":"track",source:source(kind,target.id)};
+          const score=Math.max(...seedRoles.map(c=>c.role===role?weight[role]:Math.min(weight[c.role],weight[role])*.7));
+          targets.push({id:target.id,kind,credit,score});foundTargets++;
+        }
+        if(foundTargets)followed++;
+      }catch{partial=true;notes.push("A credited person's participation records could not be loaded. Retry to include that branch.");}
     }
-    if(people.length>3)notes.push("Exploring the three highest-priority credited people first. Start another track to follow another branch.");
-    if(!people.length)notes.push("This recording is found, but production, mixing and mastering relationships are not listed in MusicBrainz yet.");
+    if(appleCredits.length)notes.push("Song-level credits read directly from the selected Apple Music song, with participation records from MusicBrainz.");
+    if(people.length>3)notes.push("Up to three connected people are explored per station, prioritizing production, mixing and mastering.");
+    if(!people.length)notes.push("Neither available source lists usable production or writing credits for this version yet.");
+    else if(!targets.length)notes.push("Credits were found, but their other participation records could not be linked confidently. Namesakes were not merged.");
     const ordered=targets.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
     const distinct=ordered.filter((t,i)=>ordered.findIndex(x=>x.id===t.id&&x.kind===t.kind)===i);
-    return {seed,targets:distinct,notes};
+    return {seed,targets:distinct,notes:[...new Set(notes)],partial,status:distinct.length?"connected":people.length?"connections-missing":"credits-missing"};
   });
 }
-export type LiveStationResult={seed:StationTrack;rows:Recommendation[];nextOffset:number|null;scanned:number;totalConnections:number;notes:string[];partial?:boolean};
+export type LiveStationResult={seed:StationTrack;rows:Recommendation[];nextOffset:number|null;scanned:number;totalConnections:number;notes:string[];partial?:boolean;status:Graph["status"]};
 export async function liveStation(id:string,offset=0):Promise<LiveStationResult>{
   if(!Number.isInteger(offset)||offset<0||offset>10000)throw new StationError("Invalid station page.",400);
   return cached("station:"+id+":"+offset,900_000,async()=>{
     const g=await graph(id),candidates:StationTrack[]=[],notes=[...g.notes];
     const batch=g.targets.slice(offset,offset+8);
-    let partial=false;
+    let partial=g.partial;
     for(const target of batch){
       try{
         if(target.kind==="recording"){
@@ -172,6 +211,6 @@ export async function liveStation(id:string,offset=0):Promise<LiveStationResult>
     const rows=[...locals,...live].filter((r,i,a)=>!a.slice(0,i).some(x=>sameSong(x.track,r.track))).sort((a,b)=>b.score-a.score);
     // Spread out artists without discarding the rest of the source-backed queue.
     const diverse:Recommendation[]=[];while(rows.length){const i=rows.findIndex(r=>normalize(r.track.artist)!==normalize(diverse.at(-1)?.track.artist||g.seed.artist));diverse.push(rows.splice(i<0?0:i,1)[0]);}
-    return {seed:g.seed,rows:diverse,nextOffset:offset+batch.length<g.targets.length?offset+batch.length:null,scanned:offset+batch.length,totalConnections:g.targets.length,notes,partial};
+    return {seed:g.seed,rows:diverse,nextOffset:offset+batch.length<g.targets.length?offset+batch.length:null,scanned:offset+batch.length,totalConnections:g.targets.length,notes,partial,status:g.status};
   });
 }

@@ -21,6 +21,7 @@ export function DiscoveryStation() {
   const [searchError,setSearchError]=useState(""),[stationError,setStationError]=useState(""),[searchNote,setSearchNote]=useState("");
   const [notes,setNotes]=useState<string[]>([]),[nextOffset,setNextOffset]=useState<number|null>(null),[total,setTotal]=useState(0);
   const [canExpand,setCanExpand]=useState(false),[limit,setLimit]=useState(40),[retryOffset,setRetryOffset]=useState(0);
+  const [creditStatus,setCreditStatus]=useState<LiveStationResult["status"]>("credits-missing");
   const searchRequest=useRef<AbortController|null>(null),stationRequest=useRef<AbortController|null>(null),startingId=useRef("");
   useEffect(()=>()=>{searchRequest.current?.abort();stationRequest.current?.abort();},[]);
   const queue=useMemo(()=>{
@@ -43,14 +44,25 @@ export function DiscoveryStation() {
   async function fetchStation(t:StationTrack,offset=0){
     stationRequest.current?.abort();const c=new AbortController();stationRequest.current=c;
     setLoading(true);setStationError("");setRetryOffset(offset);setNotice(offset?"Following more credit connections…":"Finding this recording, its credits and other releases…");
-    try{const d:LiveStationResult=await api("/api/station?"+new URLSearchParams({id:startingId.current||t.id,offset:String(offset)}),c.signal);if(c.signal.aborted)return;
+    try{
+      let page=offset, d:LiveStationResult;
+      // Automatically pass batches containing only this album / unusable records.
+      // Keep a bound and stop on partial failures so retry does not lose a failed batch.
+      for(let attempt=0;;attempt++){
+        setRetryOffset(page);
+        d=await api("/api/station?"+new URLSearchParams({id:startingId.current||t.id,offset:String(page)}),c.signal);
+        if(c.signal.aborted)return;
+        if(d.rows.length||d.nextOffset===null||d.partial||attempt>=2)break;
+        page=d.nextOffset;setNotice("Credits found. Looking beyond your starting album…");
+      }
+      setCreditStatus(d.status);
       setSeed(d.seed);setRows(previous=>{const merged=offset?[...previous,...d.rows]:d.rows;return merged.filter((r,i)=>merged.findIndex(x=>x.track.id===r.track.id||x.track.recordingId===r.track.recordingId)===i);});
       setNextOffset(d.nextOffset);setTotal(d.totalConnections);setNotes(d.notes);setNotice(d.rows.length?"Found "+d.rows.length+" tracks through credits and source connections.":d.nextOffset!==null?"This batch overlaps your album. Load more connections to continue.":"No documented connections were found for this version yet.");
       if(d.partial)setStationError("Some records could not be loaded. Retry this batch to include them.");
     }catch(e){if(!c.signal.aborted){setStationError(e instanceof Error?e.message:"Credit lookup failed. Please retry.");setNotice("Live credit lookup could not finish. Your starting track is kept.");}}
     finally{if(!c.signal.aborted)setLoading(false);}
   }
-  function start(t:StationTrack){startingId.current=t.id;setSeed(t);setRows(recommend(t.id,stationCatalog));setSeen([]);setNextOffset(null);setTotal(0);setNotes([]);void fetchStation(t);}
+  function start(t:StationTrack){startingId.current=t.id;setSeed(t);setRows(recommend(t.id,stationCatalog));setSeen([]);setNextOffset(null);setTotal(0);setNotes([]);setCreditStatus("credits-missing");void fetchStation(t);}
   function react(value:"like"|"dislike"){
     if(!current)return;
     setFeedback(f=>({...f,[current.track.id]:value}));
@@ -81,6 +93,7 @@ export function DiscoveryStation() {
         {loading&&<p className="station-meta">Checking public credit records. A first lookup can take up to a minute.</p>}
         {stationError&&<div role="alert" className="station-error"><p>{stationError}</p><button onClick={()=>seed&&void fetchStation(seed,retryOffset)}>Retry credit lookup</button></div>}
         {seed&&<div className="station-origin"><span>STARTING FROM</span><b>{seed.title} / {seed.artist}</b><small>Excluded album: {seed.album}</small><a className="station-meta" href={seed.source.url} target="_blank" rel="noreferrer">View catalog source ↗</a></div>}
+        {seed&&seed.credits.length>0&&<details className="station-credit-check"><summary>Credits found · {[...new Set(seed.credits.map(c=>c.name))].length} people</summary><ul>{seed.credits.filter((c,i,a)=>a.findIndex(x=>x.name===c.name&&x.role===c.role)===i).map(c=><li key={c.person+":"+c.role}><a href={c.source.url} target="_blank" rel="noreferrer">{c.name}</a><span>{c.role}{c.scope==="release"?" · album edition":" · this track"}</span></li>)}</ul></details>}
         {current?<><article className="station-current" key={current.track.id}>
           <span className="eyebrow">NEXT DISCOVERY</span><h3>{current.track.title}</h3><p className="station-artist">{current.track.artist}</p><p className="station-meta">{current.track.album}</p>
           <div className="station-tags">{[...new Set(current.reasons.map(r=>r.label))].map(label=><span key={label}>{label}</span>)}</div>
@@ -88,13 +101,13 @@ export function DiscoveryStation() {
           <div className="station-feedback"><button onClick={()=>react("like")}><ThumbsUp size={16} aria-hidden="true"/>More like this</button><button onClick={()=>react("dislike")}><ThumbsDown size={16} aria-hidden="true"/>Not for me</button><button onClick={()=>start(current.track)}>Start from this track ↗</button></div>
           <Evidence row={current}/>
         </article><div className="station-upnext"><h4>IN THE QUEUE <span>{queue.length-1}</span></h4>{queue.slice(1,5).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{row.reasons[0]?.label}</span></div>)}</div></>:
-        <div className="station-empty"><Radio size={42} strokeWidth={1} aria-hidden="true"/><h3>{loading?"Following the people behind it…":seed?"Keep exploring.":"A different way in."}</h3><p>{seed?(loading?"Looking beyond a fixed playlist — into real participation records.":nextOffset!==null?"Load the next batch of participation records below.":"No more documented matches are available for this recording right now. Try another song or album version."):"Find a song, then discover other releases connected by the people who made it."}</p>{seed&&!loading&&rows.length>0&&<button onClick={()=>{setSeen([]);setNotice("Station replayed. Hidden tracks remain excluded.");}}>Replay station</button>}</div>}
+        <div className="station-empty"><Radio size={42} strokeWidth={1} aria-hidden="true"/><h3>{loading?"Following the people behind it…":!seed?"A different way in.":stationError?"The lookup was interrupted.":rows.length?"You've reached this queue's end.":creditStatus==="connections-missing"?"Credits found. A link is still missing.":nextOffset!==null?"There's more to explore.":"Credits aren't available yet."}</h3><p>{seed?(loading?"Reading song credits from Apple Music and following participation records in MusicBrainz.":stationError?"Your track is kept. Retry the lookup above; a service error does not mean this song has no connections.":nextOffset!==null?"The checked records belong to your starting album or lack usable releases. Continue with more connections below.":rows.length?"Replay the station, or choose another starting point.":creditStatus==="connections-missing"?"We found people behind this song, but couldn't connect their other work confidently. Their source credits are listed above.":"The available sources don't list usable credits for this edition. Check another edition without losing your starting track."):"Find a song, then discover other releases connected by the people who made it."}</p>{seed&&!loading&&<div className="station-actions">{rows.length>0&&<button onClick={()=>{setSeen([]);setNotice("Station replayed. Hidden tracks remain excluded.");}}>Replay station</button>}<button disabled={searching} onClick={()=>{const q=(seed.artist+" "+seed.title.split("(")[0]).slice(0,120);setQuery(q);void search(q,40,"musicbrainz");}}>Find other editions</button></div>}</div>}
         {nextOffset!==null&&<button className="station-more" disabled={loading} onClick={()=>seed&&void fetchStation(seed,nextOffset)}>{loading?"Loading credits…":"Load more credit connections"}</button>}
         {total>0&&<p className="station-meta">{total} participation records found · loaded in batches, excluding your starting album.</p>}
         {notes.map(n=><p className="station-meta" key={n}>{n}</p>)}
       </div>
     </div>
     <footer className="station-foot"><span>Likes and hidden tracks apply only to this session. Nothing is saved to an account.</span><button onClick={()=>{setFeedback({});setSeen([]);setNotice("Session feedback cleared.");}}><RotateCcw size={15} aria-hidden="true"/>Reset feedback</button></footer>
-    <details className="station-method"><summary>How this station works</summary><p>Search uses Apple’s public US music catalog, with MusicBrainz as a fallback. Selecting a song looks up its recording and album in MusicBrainz, then follows production, mixing, mastering and arrangement credits to other recordings and releases. The three highest-priority credited people are explored first; more participation records load on request. Existing source-backed connections are kept. Release-level credits refer to a specific edition. The starting recording and known album groups are excluded. Credits are community-maintained: missing information is not filled in by guessing or fan similarity. No BPM, audio analysis, listening history or Apple Discovery Station algorithm is used. Catalog and credit coverage are not universal. Listen opens ordinary YouTube search.</p></details>
+    <details className="station-method"><summary>How this station works</summary><p>Search uses Apple’s public US music catalog, with MusicBrainz as a fallback. We read the selected song’s public Apple Music credits as well as matching MusicBrainz recording and release credits. Credited names and aliases are linked to MusicBrainz people only when the match is unambiguous, then their production, mixing, mastering, arrangement and writing relationships lead to other recordings and releases. Up to three connected people are explored, prioritizing production, mixing and mastering. Empty batches are checked automatically before offering more. Existing source-backed connections are kept. Album-edition credits are labeled; the starting song and known album groups are excluded. Missing credits are never invented or replaced with fan similarity. Public pages and community records may be incomplete or temporarily unavailable. No BPM, audio analysis, listening history or Apple Discovery Station algorithm is used. Listen opens ordinary YouTube search.</p></details>
   </section>;
 }
