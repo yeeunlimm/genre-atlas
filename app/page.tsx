@@ -5,6 +5,7 @@ import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from "@/comp
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
 import {AlbumWall} from "@/components/album-wall";
 import {CassetteCollage} from "@/components/cassette-collage";
+import {DiscoveryStation} from "@/components/discovery-station";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
 type AlbumArtwork={title:string;imageUrl:string};
 type Artist={albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[];wiki?:GenreArtist;id:string;name:string;audience:number|null;audienceLabel:string;url:string;checkedAt:string;subscribers?:number|null};
@@ -80,7 +81,7 @@ export default function Home(){
  const cloud=[...sorted.filter((_,i)=>i%2===0).reverse(),...sorted.filter((_,i)=>i%2===1)];
  const activeNote=genreMode?(selectedGenre?"Independent NamuWiki genre discovery — not filtered from All related.":"Choose a genre in the sidebar.") : note;
  return <main>
- <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a></header>
+ <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><nav className="station-nav" aria-label="Music discovery"><a href="#discovery-station">Discovery Station</a><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a></nav></header>
  <div className="workspace">
  <section className="search-deck" aria-label="Artist discovery">
  <div className="search-main"><h1>DISCOVER</h1>
@@ -88,6 +89,7 @@ export default function Home(){
  <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","A$AP Rocky","Kanye West"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
  <AlbumWall/>
  </section>
+ <DiscoveryStation/>
  {error&&<div className="message error" role="alert">{error}<button onClick={()=>void search(query)}>Try again</button></div>}
  {candidates.length>0&&<section className="candidate-results" aria-label="Artist search results"><h2>SELECT ARTIST</h2><div>{candidates.map(a=><button key={a.id} onClick={()=>void selectArtist(a)}><b>{englishText(a.name,"Artist")}</b><span>{compact(a.audience)} monthly audience</span><ArrowRight size={17}/></button>)}</div></section>}
  <section className="explorer">
