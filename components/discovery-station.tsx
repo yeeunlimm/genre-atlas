@@ -74,7 +74,13 @@ export function DiscoveryStation() {
         <form onSubmit={e=>{e.preventDefault();void search();}}><label htmlFor="station-search">Find a starting track</label>
         <div className="station-search"><Search size={18} aria-hidden="true"/><input id="station-search" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Song or artist" maxLength={120} aria-describedby="station-search-help"/><button type="submit" disabled={searching}>{searching?"Searching…":"Search"}</button></div></form>
         <p className="station-meta" id="station-search-help">Search the live catalog. No account needed. No BPM filter.</p>
-        <div className="station-seeds"><button onClick={()=>{setQuery("2hollis star");void search("2hollis star");}}>2hollis / star</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="makgeolli-banger")!)}>MAKGEOLLI BANGER</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="rosa")!)}>Rosa</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="new-person")!)}>Tame Impala</button><button onClick={()=>start(stationCatalog.find(t=>t.id==="skeletons")!)}>SKELETONS</button></div>
+        <div className="station-seeds">{[
+          {title:"SKELETONS",artist:"Travis Scott"},
+          {title:"Lifestyle",artist:"Rich Gang"},
+          {title:"Victory Lap",artist:"Fred again.."},
+          {title:"Boy's a liar",artist:"PinkPantheress"},
+          {title:"Summer Gypsy",artist:"Nujabes"},
+        ].map(pick=><button key={pick.title} onClick={()=>{const q=pick.title+" "+pick.artist;setQuery(q);void search(q);}}>{pick.title} / {pick.artist}</button>)}</div>
         <p role="status" className="station-meta">{searching?"Searching the external music catalog…":searchNote}</p>
         {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
         <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>
