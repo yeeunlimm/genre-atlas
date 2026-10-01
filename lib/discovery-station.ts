@@ -1,6 +1,6 @@
 import type {CreditRole, Source, StationTrack} from "./station-catalog";
 export type Feedback = Record<string, "like" | "dislike">;
-export type Reason = {kind: "credit" | "sample" | "genre"; label: string; detail: string; sources: Source[]};
+export type Reason = {kind: "credit" | "sample" | "genre" | "related-artist" | "similar-track"; label: string; detail: string; sources: Source[]};
 export type Recommendation = {track: StationTrack; score: number; reasons: Reason[]; feedbackBoost: boolean};
 // Prefer the provider's primary artist identity. Do not split band names at '&'.
 function artistKeys(track: StationTrack): string[] {
