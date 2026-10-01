@@ -1,0 +1,182 @@
+{
+  "checkedAt": "2026-09-22",
+  "verification": "Album identity and exact square image URL observed in official Apple Music page twitter:image metadata, except loveless observed in artist website image element. No URL dimension variants invented.",
+  "copyright": "Album cover copyrights remain with their respective owners. Public image availability does not imply free licensing.",
+  "caveats": [
+    "2hollis — 2 is the official 2023 album, 11 tracks.",
+    "Don't Be Dumb source is the current 32-song edition; cover as currently supplied by Apple Music.",
+    "My Beautiful Dark Twisted Fantasy is the standard Apple Music artwork; artwork variants exist.",
+    "The New Abnormal source URL has at-the-door in its path, but the returned page title and album are The New Abnormal.",
+    "loveless is from the artist official website because the US iTunes search did not list the original album."
+  ],
+  "albums": [
+    {
+      "artist": "Arctic Monkeys",
+      "title": "AM",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/69/9c/b5/699cb5d6-115c-ff73-9d26-e57ea4350d72/887828031795.png/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/am/663097964",
+      "verified": true
+    },
+    {
+      "artist": "Tame Impala",
+      "title": "Currents",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/2e/b4/a82eb490-f30a-a321-461a-0383c88fec95/15UMGIM23316.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/currents/1440838039",
+      "verified": true
+    },
+    {
+      "artist": "Travis Scott",
+      "title": "UTOPIA",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/7d/4f/94/7d4f9468-56e1-3a2d-7186-c8088170ef58/196871341899.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/utopia/1708274558",
+      "verified": true
+    },
+    {
+      "artist": "Future",
+      "title": "High Off Life",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/64/ce/3f/64ce3f2a-b523-8f83-46fc-ef70b6ea48ff/886448469704.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/high-off-life/1513388867",
+      "verified": true
+    },
+    {
+      "artist": "Kanye West",
+      "title": "Graduation",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/39/25/2d/39252d65-2d50-b991-0962-f7a98a761271/00602517483507.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/graduation/1442845779",
+      "verified": true
+    },
+    {
+      "artist": "my bloody valentine",
+      "title": "loveless",
+      "imageUrl": "https://mybloodyvalentine.org/wp-content/uploads/2020/12/loveless_TPS-2-1000x1000.jpg",
+      "sourceUrl": "https://mybloodyvalentine.org/",
+      "verified": true
+    },
+    {
+      "artist": "Tyler, The Creator",
+      "title": "CHROMAKOPIA",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/b6/ef/ee/b6efeefa-fc99-37d1-ad21-0d769b2a4958/196872796971.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/chromakopia/1789446415",
+      "verified": true
+    },
+    {
+      "artist": "Don Toliver",
+      "title": "OCTANE",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/00/c1/dd/00c1dd09-3f86-7288-01dc-63b9f4262f57/075679599377.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/octane/1873328276",
+      "verified": true
+    },
+    {
+      "artist": "Charli xcx",
+      "title": "Brat and it’s completely different but also still brat",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/e2/21/3b/e2213b51-6d62-8ef0-b19a-d78ec0f873d8/075679626998.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/brat-and-its-completely-different-but-also-still-brat/1773518270",
+      "verified": true
+    },
+    {
+      "artist": "Arctic Monkeys",
+      "title": "Favourite Worst Nightmare",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/82/90/14/829014ad-a301-62ab-bee6-f4cca4457411/mzi.hozudery.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/favourite-worst-nightmare/251499221",
+      "verified": true
+    },
+    {
+      "artist": "A$AP Rocky",
+      "title": "Don't Be Dumb",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/36/ed/58/36ed58dc-ca09-c54d-de2c-620bed1d62cd/196874039847.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/dont-be-dumb/1870774355",
+      "verified": true
+    },
+    {
+      "artist": "Jack Harlow",
+      "title": "Monica",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/66/b3/a8/66b3a8d4-10ba-ea70-37ff-b1e73ab22431/075679586377.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/monica/1878823462",
+      "verified": true
+    },
+    {
+      "artist": "mgk",
+      "title": "Tickets To My Downfall",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/36/05/c3/3605c3be-9d24-613b-3839-bf1b53670acf/20UMGIM66016.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/tickets-to-my-downfall/1526411917",
+      "verified": true
+    },
+    {
+      "artist": "2hollis",
+      "title": "2",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/2e/d2/d9/2ed2d9f6-537e-69b7-0347-1fdd881a2c97/197342224826_cover.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/2/1687014179",
+      "verified": true
+    },
+    {
+      "artist": "Tame Impala",
+      "title": "The Slow Rush",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/65/e3/e7/65e3e740-b69f-f5cb-f2e6-7dedb5265ac9/19UMGIM96748.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/the-slow-rush/1497230760",
+      "verified": true
+    },
+    {
+      "artist": "21 Savage, Offset & Metro Boomin",
+      "title": "Without Warning",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/7d/11/01/7d110130-c1b3-b99a-8459-9f6a3666ed3c/886446838533.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/without-warning/1310806859",
+      "verified": true
+    },
+    {
+      "artist": "The Strokes",
+      "title": "The New Abnormal",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/62/a6/ff/62a6ff2a-95c9-5302-31f4-2dcca9e40323/886448281085.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/at-the-door/1498121188",
+      "verified": true
+    },
+    {
+      "artist": "Playboi Carti",
+      "title": "Whole Lotta Red",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ba/1e/05/ba1e058e-5637-e53c-563c-f5b9a1a6c344/20UM1IM18331.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/whole-lotta-red/1546163603",
+      "verified": true
+    },
+    {
+      "artist": "JID",
+      "title": "God Does Like Ugly",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7b/e1/66/7be166a3-92e6-c505-0802-9599973629ea/25UMGIM55109.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/god-does-like-ugly/1812517697",
+      "verified": true
+    },
+    {
+      "artist": "Drake",
+      "title": "More Life",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/18/9d/b8/189db80b-bfa8-89d1-1514-5fcb7e5cf8f4/00602557611526.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/more-life/1440891750",
+      "verified": true
+    },
+    {
+      "artist": "DPR IAN",
+      "title": "Moodswings In This Order",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a8/f5/e4/a8f5e4d6-25d6-9d0a-8d18-c9e497488a95/196006077655.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/moodswings-in-this-order/1555436307",
+      "verified": true
+    },
+    {
+      "artist": "Kanye West",
+      "title": "My Beautiful Dark Twisted Fantasy",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d1/74/da/d174dacf-5782-dfe2-19f7-ce037dcd0237/00602527584935.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/my-beautiful-dark-twisted-fantasy/1443160553",
+      "verified": true
+    },
+    {
+      "artist": "Metro Boomin",
+      "title": "NOT ALL HEROES WEAR CAPES",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/cd/87/e5/cd87e5ea-f001-04e6-4248-22f4cfbedb23/18UMGIM75545.rgb.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/not-all-heroes-wear-capes/1441065529",
+      "verified": true
+    },
+    {
+      "artist": "A$AP Rocky",
+      "title": "LONG.LIVE.A$AP",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/50/b3/9d/50b39db3-0922-2863-37aa-37b9a47f7ad7/886443325524.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/long-live-a%24ap/581997129",
+      "verified": true
+    }
+  ]
+}
