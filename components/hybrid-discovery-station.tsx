@@ -37,7 +37,7 @@ export function DiscoveryStation(){
     try{const d=await api<{tracks:StationTrack[];canExpand:boolean;warning:string;provider:string}>("/api/station?"+new URLSearchParams({q:q.trim(),limit:String(count),catalog}),c.signal);if(c.signal.aborted)return;setMatches(d.tracks);setCanExpand(d.canExpand);setSearchNote(d.warning||"Results from "+d.provider+" · select up to five songs.");}
     catch(e){if(!c.signal.aborted)setSearchError(e instanceof Error?e.message:"Search failed.");}finally{if(!c.signal.aborted)setSearching(false);}
   }
-  function toggle(t:StationTrack){if(!selected.some(s=>songKey(s)===songKey(t))&&selected.length>=5){setNotice("Choose up to five starting songs. Remove one to add another.");return;}setSelected(previous=>previous.some(s=>songKey(s)===songKey(t))?previous.filter(s=>songKey(s)!==songKey(t)):[...previous,t]);}
+  function toggle(t:StationTrack){if(!selected.some(s=>songKey(s)===songKey(t))&&selected.length>=5){setNotice("Choose up to five starting songs. Remove one to add another.");return;}setSelected(previous=>previous.some(s=>s.id===t.id)?previous.filter(s=>s.id!==t.id):previous.some(s=>songKey(s)===songKey(t))?previous.map(s=>songKey(s)===songKey(t)?t:s):[...previous,t]);}
   async function runJob(job:Job,signal:AbortSignal){
     if(signal.aborted)return;
     const key=jobKey(job);setProgress(p=>({...p,[key]:{...job,state:"loading",count:p[key]?.count||0,note:"Loading…",nextOffset:null}}));
@@ -81,7 +81,7 @@ export function DiscoveryStation(){
       <div className="station-selected"><h3>YOUR STARTING POINTS <span>{selected.length}/5</span></h3>{selected.length===0?<p className="station-meta">Select songs below, then build your station.</p>:selected.map(t=><div key={t.id}><span><b>{t.title}</b><small>{t.artist}</small></span><button aria-label={"Remove "+t.title} onClick={()=>toggle(t)}>×</button></div>)}<button className="station-build" disabled={!selected.length||!hydrated} onClick={()=>void start()}>Build my station →</button></div>
       <p role="status" className="station-meta">{searching?"Searching the live catalog…":searchNote}</p>
       {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
-      <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>{matches.map(t=><button key={t.id} aria-pressed={selected.some(s=>songKey(s)===songKey(t))} onClick={()=>toggle(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":""}</span></button>)}{searched&&!searching&&!searchError&&!matches.length&&<p>No songs found. Try the artist and song title.</p>}</div>
+      <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>{matches.map(t=><button key={t.id} aria-pressed={selected.some(s=>s.id===t.id)} onClick={()=>toggle(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":""}</span></button>)}{searched&&!searching&&!searchError&&!matches.length&&<p>No songs found. Try the artist and song title.</p>}</div>
       {canExpand&&!searching&&<button onClick={()=>void search(searched,limit===40?100:200)}>More search results</button>}
       {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Other catalog versions</button>}
     </div><div className="station-output">
