@@ -39,7 +39,7 @@ async function json(url:string,mb=false):Promise<Raw>{
   mbTail=job;return job.finally(()=>{mbWaiting--;});
 }
 const mb=(path:string)=>cached("mb:"+path,3600_000,()=>json("https://musicbrainz.org/ws/2/"+path+(path.includes("?")?"&":"?")+"fmt=json",true));
-const apple=(path:string)=>cached("apple:"+path,900_000,()=>json("https://itunes.apple.com/"+path));
+export const apple=(path:string)=>cached("apple:"+path,900_000,()=>json("https://itunes.apple.com/"+path));
 const quote=(s:string)=>'"'+s.replace(/["\\]/g," ")+'"';
 const artistNames=(r:Raw)=>(r["artist-credit"]||[]).map((a:Raw)=>(a.name||a.artist?.name||"")+ (a.joinphrase||"")).join("");
 const groups=(r:Raw)=>[...new Set<string>((r.releases||[]).map((x:Raw)=>x["release-group"]?.id).filter(Boolean))];
@@ -104,7 +104,7 @@ export async function liveSearch(q:string,limit=40,catalog="apple"){
   }
 }
 const record=(id:string)=>mb("recording/"+id+"?inc=artist-rels+artist-credits+releases+release-groups");
-async function loadTrack(id:string):Promise<StationTrack>{
+export async function loadTrack(id:string):Promise<StationTrack>{
   const local=stationCatalog.find(t=>t.id===id);if(local)return local;
   if(/^itunes:\d{1,16}$/.test(id)){
     const data=await apple("lookup?id="+id.slice(7)+"&entity=song&country=US");
