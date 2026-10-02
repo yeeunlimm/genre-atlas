@@ -84,6 +84,15 @@ async function searchMusicBrainz(q:string){
   const d=await mb("recording/?query="+encodeURIComponent(query)+"&limit=40");
   return unique((d.recordings||[]).map(parseRecording).filter(Boolean));
 }
+// A fallback catalog, not a new recommendation signal. Resolve the artist first
+// so cover versions and namesakes cannot become another artist's discoveries.
+export async function musicBrainzCatalog(artist:string,title?:string):Promise<StationTrack[]>{
+  const person=await creditPerson(artist);
+  if(!person)return [];
+  const query="arid:"+person.id+(title?" AND recording:"+quote(title):"");
+  const d=await mb("recording/?query="+encodeURIComponent(query)+"&limit=40");
+  return unique((d.recordings||[]).filter((r:Raw)=>!r.video&&r["artist-credit"]?.[0]?.artist?.id===person.id).map(parseRecording).filter((t:StationTrack|null):t is StationTrack=>!!t&&(!title||normalize(t.title)===normalize(title))));
+}
 export async function liveSearch(q:string,limit=40,catalog="apple"){
   if(q.trim().length<2||q.length>120)throw new StationError("Enter 2–120 characters to search for a song or artist.",400);
   const local=searchTracks(q,stationCatalog);

@@ -8,10 +8,8 @@ import type {LiveStationResult} from "@/lib/live-station";
 import type {SourceResult} from "@/lib/hybrid-sources";
 import {StationArtwork} from "./station-artwork";
 import {addLiked,emptyProfile,profileKey,readProfile,stationSeeds} from "@/lib/station-profile";
+import {attemptKey,emptyStationMessage,jobKey,recoveryJobs,type Job,type Progress} from "@/lib/station-recovery";
 
-type Job={seed:StationTrack;route:Route;offset:number};
-type Progress=Job & {state:"loading"|"ready"|"empty"|"disabled"|"partial"|"error";count:number;note:string;nextOffset:number|null};
-const jobKey=(job:Job)=>job.seed.id+"|"+job.route;
 const picks=[{title:"SKELETONS",artist:"Travis Scott"},{title:"Lifestyle",artist:"Rich Gang"},{title:"Victory Lap",artist:"Fred again.."},{title:"Boy's a liar",artist:"PinkPantheress"},{title:"Summer Gypsy",artist:"Nujabes"}];
 const asCredits=(seed:StationTrack,rows:ReturnType<typeof recommend>):Candidate[]=>rows.filter(r=>r.reasons.some(x=>x.kind==="credit"||x.kind==="sample")).map(r=>({...r,paths:[{route:"credits",seedId:seed.id,confidence:Math.min(.95,.6+r.score*.035)}]}));
 
@@ -24,6 +22,8 @@ export function DiscoveryStation(){
   const [memory,setMemory]=useState<Memory>(blankMemory),[hydrated,setHydrated]=useState(false),[storageNote,setStorageNote]=useState("");
   const [progress,setProgress]=useState<Record<string,Progress>>({}),[notice,setNotice]=useState("");
   const searchRequest=useRef<AbortController|null>(null),stationRequest=useRef<AbortController|null>(null);
+  const autoAttempts=useRef(new Set<string>()),recoveryLock=useRef(false);
+  const [recoveryBusy,setRecoveryBusy]=useState(false);
   async function loadIdentity(){
     setHydrated(false);setAuthError("");let id:string|null=null;
     try{const response=await fetch("/api/station/session",{cache:"no-store"});if(!response.ok)throw new Error();const d=await response.json() as {userId?:string|null};id=typeof d.userId==="string"?d.userId:null;}catch{if(mounted.current)setAuthError("Sign-in could not be checked. Discovery still works; retry to use likes.");}
@@ -42,7 +42,23 @@ export function DiscoveryStation(){
   const shown=current?(rows.find(r=>songKey(r.track)===songKey(current.track))||current):undefined;
   const queue=useMemo(()=>rankCandidates(rows,seeds,memory,current?[...consumed,current.track]:consumed),[rows,seeds,memory,current,consumed]);
   const weights=routeWeights(memory),loading=Object.values(progress).some(p=>p.state==="loading");
-  async function api<T>(url:string,signal:AbortSignal):Promise<T>{const response=await fetch(url,{signal});let data:T & {error?:string};try{data=await response.json();}catch{throw new Error("The music service returned an unexpected response. Please retry this source.");}if(!response.ok)throw new Error(data.error||"Music lookup failed. Please retry.");return data;}
+  const plan=recoveryJobs(Object.values(progress),autoAttempts.current);
+  const finding=loading||recoveryBusy||(!current&&!ranked.length&&plan.length>0);
+  const emptyMessage=emptyStationMessage(rows,seeds,memory,consumed,Object.values(progress));
+  useEffect(()=>{
+    const c=stationRequest.current;
+    if(!hydrated||current||ranked.length||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
+    const jobs=recoveryJobs(Object.values(progress),autoAttempts.current);if(!jobs.length)return;
+    for(const job of jobs)autoAttempts.current.add(attemptKey(job));
+    void recover(jobs,c);
+  },[hydrated,current,ranked,seeds,progress,loading,recoveryBusy]);
+  async function recover(jobs:Job[],controller:AbortController){
+    if(recoveryLock.current||controller.signal.aborted)return;
+    recoveryLock.current=true;setRecoveryBusy(true);setNotice("Looking further across your discovery sources…");
+    try{let index=0;await Promise.all([0,1].map(async()=>{while(index<jobs.length&&!controller.signal.aborted)await runJob(jobs[index++],controller.signal);}));}
+    finally{if(stationRequest.current===controller){recoveryLock.current=false;setRecoveryBusy(false);setNotice("");}}
+  }
+  async function api<T>(url:string,signal:AbortSignal):Promise<T>{const response=await fetch(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(90000)])});let data:T & {error?:string};try{data=await response.json();}catch{throw new Error("The music service returned an unexpected response. Please retry this source.");}if(!response.ok)throw new Error(data.error||"Music lookup failed. Please retry.");return data;}
   async function search(q=query,count=40,catalog="apple"){
     if(q.trim().length<2){setSearchError("Enter at least two characters.");return;}
     searchRequest.current?.abort();const c=new AbortController();searchRequest.current=c;setSearching(true);setSearchError("");setSearched(q);setMatches([]);setCanExpand(false);setLimit(count);
@@ -67,6 +83,7 @@ export function DiscoveryStation(){
   }
   async function start(track:StationTrack,saved=liked,preserve=false,consumedTrack?:StationTrack){
     const tracks=stationSeeds(track,saved);stationRequest.current?.abort();const controller=new AbortController();stationRequest.current=controller;
+    autoAttempts.current=new Set();recoveryLock.current=false;setRecoveryBusy(false);
     setOrigin(track);setSeeds(tracks);if(!preserve||consumedTrack)setCurrent(undefined);setConsumed(previous=>preserve?(consumedTrack?[...previous,consumedTrack]:previous):[]);
     const starter=tracks.flatMap(t=>asCredits(t,recommend(t.id,stationCatalog)));
     setRows(previous=>mergeCandidates([...(preserve?previous.map(r=>({...r,paths:r.paths.filter(p=>tracks.some(t=>t.id===p.seedId))})).filter(r=>r.paths.length):[]),...starter]));
@@ -75,7 +92,7 @@ export function DiscoveryStation(){
     const jobs=order.flatMap(route=>tracks.map(seed=>({seed,route,offset:0})));
     setProgress(Object.fromEntries(jobs.map(j=>[jobKey(j),{...j,state:"loading",count:0,note:"Queued…",nextOffset:null}])));
     let index=0;await Promise.all([0,1].map(async()=>{while(index<jobs.length&&!controller.signal.aborted)await runJob(jobs[index++],controller.signal);}));
-    if(!controller.signal.aborted)setNotice("Ready. Like a song to shape what comes next.");
+    if(!controller.signal.aborted)setNotice("");
   }
   function advance(vote?:"dislike"){
     if(!shown)return;if(vote)setMemory(m=>recordVote(m,shown,vote));
@@ -96,6 +113,7 @@ export function DiscoveryStation(){
     }catch(e){if(!controller.signal.aborted)setNotice(e instanceof Error?e.message:"Your like could not be saved. Try again.");}finally{if(!controller.signal.aborted)setLiking(false);}
   }
   function retry(p:Progress,more=false){const c=stationRequest.current;if(!c||c.signal.aborted)return;void runJob({...p,offset:more?(p.nextOffset??p.offset):p.offset},c.signal);}
+  function retrySources(){const c=stationRequest.current;if(!c||c.signal.aborted)return;const jobs=Object.values(progress).filter(p=>p.state==="error"||p.state==="partial"||p.nextOffset!==null).map(p=>({...p,offset:p.state==="error"||p.state==="partial"?p.offset:p.nextOffset!}));void recover(jobs,c);}
   function reset(){stationRequest.current?.abort();likeRequest.current?.abort();setLiking(false);setMemory(blankMemory());setLiked([]);setCurrent(undefined);setRows([]);setSeeds([]);setOrigin(undefined);setConsumed([]);setProgress({});setNotice("This browser's preferences were cleared. Select one song to start again.");}
   const returnTo=(origin?"/?stationTrack="+encodeURIComponent(origin.id):"/")+"#discovery-station";
   const signIn="/signin-with-chatgpt?return_to="+encodeURIComponent(returnTo),signOut="/signout-with-chatgpt?return_to="+encodeURIComponent(returnTo);
@@ -116,14 +134,14 @@ export function DiscoveryStation(){
       {canExpand&&!searching&&<button onClick={()=>void search(searched,limit===40?100:200)}>More search results</button>}
       {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Other catalog versions</button>}
     </div><div className="station-output">
-      <div className="station-status" role="status" aria-live="polite">{notice||"Find one song you want to explore."}</div>
-      {loading&&<p className="station-meta" role="status">Gathering independent sources… Credits can take a minute; other recommendations can arrive sooner.</p>}
+      <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Like a song to shape what comes next.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
+      {finding&&<p className="station-meta" role="status">Checking additional catalogs and connections automatically. Credits can take a minute; other recommendations can arrive sooner.</p>}
       {origin&&<div className="station-origin"><div className="station-origin-copy"><span>STARTING FROM</span><b>{origin.title} / {origin.artist}</b><small>Excluded album: {origin.album}</small><div className="station-feedback">{likeControl(origin)}</div>{seeds.length>1&&<small>Also shaped by {seeds.length-1} of your recent likes. Their albums are excluded too.</small>}</div><StationArtwork key={origin.id} track={origin} size="seed"/></div>}
       {shown?<><article className="station-current" key={shown.track.id}><div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{shown.track.title}</h3><p className="station-artist">{shown.track.artist}</p><p className="station-meta">{shown.track.album}</p><div className="station-tags">{[...new Set(shown.paths.map(p=>routeLabels[p.route]))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={shown.track.id+shown.track.album} track={shown.track} size="recommendation"/></div>
         <div className="station-actions"><a className="primary" href={trackYouTubeUrl(shown.track)} target="_blank" rel="noreferrer"><Play size={17}/>Listen on YouTube</a><button disabled={liking} onClick={()=>advance()}><SkipForward size={17}/>Next track</button></div>
         <div className="station-feedback">{likeControl(shown.track,shown)}<button disabled={liking} onClick={()=>advance("dislike")}><ThumbsDown size={16}/>Not for me</button><button disabled={liking} onClick={()=>void start(shown.track)}>Explore this song</button></div>
         <details className="station-evidence"><summary>Why this track?</summary><ul>{shown.reasons.map((reason,i)=><li key={i}><b>{reason.label}</b><span>{reason.detail}</span></li>)}</ul><div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div><small>Connections are discovery signals, not a guarantee of the same sound. Route weights reflect your saved feedback.</small></details>
-      </article><details className="station-upnext"><summary>Up next · {queue.length}</summary>{queue.slice(0,4).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{routeLabels[row.paths[0].route]}</span></div>)}</details></>:<div className="station-empty"><Radio size={42} strokeWidth={1}/><h3>{!seeds.length?"It starts with one song.":loading?"Finding your next discovery…":"Try another starting song."}</h3><p>{!seeds.length?"Search a song and select it. No playlist to prepare.":loading?"Each source is checked separately. You can discover while the rest finish.":"No eligible songs remain after album, artist, dislike and repeat filters. Try another song or load more sources below."}</p></div>}
+      </article><details className="station-upnext"><summary>Up next · {queue.length}</summary>{queue.slice(0,4).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{routeLabels[row.paths[0].route]}</span></div>)}</details></>:<div className="station-empty" role="status"><Radio size={42} strokeWidth={1}/><h3>{!seeds.length?"It starts with one song.":finding?"Finding your next discovery…":emptyMessage.title}</h3><p>{!seeds.length?"Search a song and select it. No playlist to prepare.":finding?"We’re checking more candidates before calling this mix finished. Your album and artist limits stay in place.":emptyMessage.detail}</p>{seeds.length>0&&!finding&&(emptyMessage.failed||emptyMessage.more)&&<button onClick={retrySources}>{emptyMessage.failed?"Retry unavailable sources":"Find more songs"}</button>}</div>}
       {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & your weights</summary><p className="station-meta">1.00× is neutral. Weights change after a like or dislike; skips do not change them.</p><div className="station-weights">{routes.map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
     </div></div>
     <footer className="station-foot"><span>{storageNote||"Preferences stay in this browser. Likes are separated by sign-in; they do not sync between devices."}</span><button disabled={!hydrated||liking} onClick={reset}><RotateCcw size={15}/>Reset saved preferences</button></footer>

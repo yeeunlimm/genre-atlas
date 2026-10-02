@@ -1,4 +1,4 @@
-import {apple,loadTrack,normalize,parseApple,StationError} from "./live-station";
+import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError} from "./live-station";
 import {music, type MusicArtist} from "./youtube-music";
 import {excluded, type Candidate, type Route} from "./hybrid-station";
 import type {StationTrack} from "./station-catalog";
@@ -9,9 +9,15 @@ async function mapLimited<T,R>(items:T[],fn:(item:T,index:number)=>Promise<R>):P
   await Promise.all(Array.from({length:Math.min(2,items.length)},async()=>{while(index<items.length){const n=index++;try{result[n]={status:"fulfilled",value:await fn(items[n],n)};}catch(reason){result[n]={status:"rejected",reason};}}}));
   return result;
 }
-async function catalog(artist:string,title?:string):Promise<StationTrack[]> {
-  const data=await apple("search?"+new URLSearchParams({term:artist+(title?" "+title:""),media:"music",entity:"song",limit:"40",country:"US",lang:"en_us"}));
-  return (data.results||[]).map(parseApple).filter((t:StationTrack|null):t is StationTrack=>!!t&&normalize(t.artist)===normalize(artist)&&(!title||normalize(t.title)===normalize(title)));
+export async function catalog(artist:string,title?:string):Promise<{tracks:StationTrack[];fallback:boolean}> {
+  let appleFailed=false;
+  try{
+    const data=await apple("search?"+new URLSearchParams({term:artist+(title?" "+title:""),media:"music",entity:"song",limit:"40",country:"US",lang:"en_us"}));
+    const tracks=(data.results||[]).map(parseApple).filter((t:StationTrack|null):t is StationTrack=>!!t&&normalize(t.artist)===normalize(artist)&&(!title||normalize(t.title)===normalize(title)));
+    if(tracks.length)return {tracks,fallback:false};
+  }catch{appleFailed=true;}
+  try{return {tracks:await musicBrainzCatalog(artist,title),fallback:true};}
+  catch{throw new StationError(appleFailed?"Apple and MusicBrainz catalogs could not load. Retry shortly.":"No exact Apple match; the alternate catalog could not load. Retry shortly.");}
 }
 export async function relatedCandidates(seed:StationTrack,offset=0):Promise<SourceResult>{
   const name=seed.primaryArtistName||seed.artist;
@@ -19,17 +25,19 @@ export async function relatedCandidates(seed:StationTrack,offset=0):Promise<Sour
   const matches=found.artists.filter(a=>normalize(a.name)===normalize(name));
   if(matches.length!==1)return {rows:[],state:"empty",note:"No unambiguous YouTube Music artist match. Other routes can still recommend tracks.",nextOffset:null};
   const data=await music("artist",matches[0].id) as {related:MusicArtist[]};
-  const peers=data.related.slice(offset,offset+6);
+  const peers=data.related.slice(0,30).slice(offset,offset+6);
+  let usedFallback=false;
   const fetched=await mapLimited(peers,async(peer,index)=>{
-    const tracks=await catalog(peer.name);
+    const result=await catalog(peer.name);usedFallback ||= result.fallback;
+    const tracks=result.tracks;
     const source={label:"YouTube Music · related artists",url:matches[0].url};
     // A small pool per artist lets album exclusions and dislikes choose another song.
     return tracks.filter(t=>!excluded(t,[seed])).slice(0,4).map((track,i):Candidate=>({track,score:0,feedbackBoost:false,
       paths:[{route:"related-artists",seedId:seed.id,confidence:Math.max(.45,.82-(offset+index)*.008-i*.025)}],
-      reasons:[{kind:"related-artist",label:"Related artist",detail:peer.name+" appears in "+name+"’s related artists. Song selected from Apple’s catalog; this is not measured track similarity.",sources:[source,track.source]}]}));
+      reasons:[{kind:"related-artist",label:"Related artist",detail:peer.name+" appears in "+name+"’s related artists. Song selected from "+(result.fallback?"MusicBrainz":"Apple")+"’s catalog; this is not measured track similarity.",sources:[source,track.source]}]}));
   });
   const rows=fetched.flatMap(r=>r.status==="fulfilled"?r.value:[]),partial=fetched.some(r=>r.status==="rejected");
-  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:partial?"Some artist catalogs could not load. Retry this route.":"Artist-level suggestions from YouTube Music, songs from Apple. No shared credits required.",nextOffset:offset+6<data.related.length?offset+6:null};
+  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:(partial?"Some artist catalogs could not load. Retry this route. ":"")+ (usedFallback?"MusicBrainz supplied alternate catalog results where Apple was unavailable or had no exact match. ":"")+"Artist-level suggestions from YouTube Music; no shared credits required.",nextOffset:offset+6<Math.min(30,data.related.length)?offset+6:null};
 }
 export async function similarCandidates(seed:StationTrack,key?:string):Promise<SourceResult>{
   if(!key)return {rows:[],state:"disabled",note:"Last.fm similar tracks is off: the site owner has not configured an API key. Other routes remain available.",nextOffset:null};
@@ -42,13 +50,13 @@ export async function similarCandidates(seed:StationTrack,key?:string):Promise<S
   const max=Math.max(1,...tracks.map(t=>Number(t.match)||0));
   const fetched=await mapLimited(tracks,async(t):Promise<Candidate[]>=>{
     if(!t.name||!t.artist?.name)return [];
-    const match=(await catalog(t.artist.name,t.name)).find(row=>!excluded(row,[seed]));if(!match)return [];
+    const match=(await catalog(t.artist.name,t.name)).tracks.find(row=>!excluded(row,[seed]));if(!match)return [];
     const source={label:"Last.fm · track similarity",url:"https://www.last.fm/music/"+encodeURIComponent(seed.artist)+"/_/"+encodeURIComponent(seed.title)};
     return [{track:match,score:0,feedbackBoost:false,paths:[{route:"similar-tracks",seedId:seed.id,confidence:.55+.4*Math.max(0,Math.min(1,(Number(t.match)||0)/max))}],
-      reasons:[{kind:"similar-track",label:"Similar track",detail:"Last.fm listening-data similarity to “"+seed.title+"”. Exact artist and title matched to Apple for album metadata; not an audio measurement.",sources:[source,match.source]}]}];
+      reasons:[{kind:"similar-track",label:"Similar track",detail:"Last.fm listening-data similarity to “"+seed.title+"”. Artist and title matched to a public catalog for album metadata; not an audio measurement.",sources:[source,match.source]}]}];
   });
   const rows=fetched.flatMap(r=>r.status==="fulfilled"?r.value:[]),partial=fetched.some(r=>r.status==="rejected");
-  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:partial?"Some similar tracks could not be resolved. Retry this route.":"Last.fm similarity requires a matching Apple album edition. Unresolved songs are omitted.",nextOffset:null};
+  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:partial?"Some similar tracks could not be resolved. Retry this route.":"Last.fm similarity matched to Apple or MusicBrainz album metadata. Unresolved songs are omitted.",nextOffset:null};
 }
 export async function discoverSource(id:string,route:Route,offset=0,key?:string){
   if(route==="similar-tracks"&&!key)return similarCandidates({} as StationTrack);
