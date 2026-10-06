@@ -1,9 +1,8 @@
-.cassette-collage{position:relative;isolation:isolate;width:100%;aspect-ratio:735/469;margin:8px 0 42px}
+.cassette-collage{position:relative;isolation:isolate;width:100%;margin:8px 0 24px}
+.cassette-shell{position:relative;width:100%;aspect-ratio:735/469}
 .cassette-base{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(1) contrast(1.08)}
-.cassette-label{position:absolute;top:5%;left:14%;width:69%;min-height:23%;padding:3px 8px 4px;background:#c7c4b9;color:#252523;font:700 17px/.95 Impact,"Arial Narrow",sans-serif;text-transform:uppercase;letter-spacing:-.5px;overflow-wrap:anywhere;transform:rotate(-5deg);box-shadow:2px 2px 1px #0005;clip-path:polygon(2% 0,20% 4%,24% 0,50% 3%,72% 0,77% 5%,98% 1%,100% 34%,98% 55%,100% 90%,86% 96%,72% 92%,68% 100%,40% 96%,21% 100%,18% 94%,0 98%,2% 70%,0 40%);z-index:2}
-.cassette-sticker{position:absolute;display:block;width:34%;aspect-ratio:1;padding:1px 3px 5px 1px;background:#bcb8aa;filter:drop-shadow(1px 3px 1px #0009);overflow:hidden;border:0;border-radius:0;clip-path:polygon(0 3%,18% 0,23% 3%,49% 1%,63% 4%,67% 0,97% 2%,100% 16%,97% 39%,100% 46%,96% 68%,99% 94%,87% 97%,71% 94%,65% 100%,43% 97%,26% 100%,20% 95%,1% 97%,3% 74%,0 66%,2% 42%)}
-.cassette-sticker img{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(.75) sepia(.22) saturate(.5) contrast(1.12);opacity:.84}
-.cassette-sticker::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(109deg,transparent 0 32%,#d8d3bc66 33%,#25252340 34%,transparent 36% 73%,#d8d3bc55 74%,transparent 76%),repeating-linear-gradient(174deg,transparent 0 12px,#ded9c12b 13px,transparent 14px 29px);mix-blend-mode:screen}
-.cassette-sticker-0{left:7%;top:61%;transform:rotate(-14deg)}
-.cassette-sticker-1{left:34%;top:60%;transform:rotate(9deg);z-index:1}
-@media(max-width:640px){.cassette-collage{width:min(100%,260px);margin:14px auto 44px}.cassette-label{font-size:19px}}
+/* Photo coordinates keep both reel cutouts aligned at every responsive size. */
+.cassette-print{position:absolute;inset:0;display:block;pointer-events:none;mask:url('/reference/cassette-print-mask.svg') center/100% 100% no-repeat;-webkit-mask:url('/reference/cassette-print-mask.svg') center/100% 100% no-repeat}
+.cassette-print img{position:absolute;left:9.2517%;top:3.4115%;width:81.6327%;height:95.9488%;object-fit:cover;object-position:center;opacity:.68;filter:grayscale(.7) sepia(.18) saturate(.55) contrast(1.12)}
+.cassette-label{position:absolute;top:7%;left:16%;width:66%;min-height:17%;padding:3px 7px;background:#c7c4b9df;color:#252523;font:700 16px/1.05 Impact,"Arial Narrow",sans-serif;text-transform:uppercase;letter-spacing:-.3px;overflow-wrap:anywhere;transform:rotate(-3deg);box-shadow:1px 2px 1px #0004;clip-path:polygon(2% 0,20% 4%,24% 0,50% 3%,72% 0,77% 5%,98% 1%,100% 34%,98% 55%,100% 90%,86% 96%,72% 92%,68% 100%,40% 96%,21% 100%,18% 94%,0 98%,2% 70%,0 40%);z-index:2}
+@media(max-width:640px){.cassette-collage{width:min(100%,260px);margin:14px auto 24px}.cassette-label{font-size:18px}}
