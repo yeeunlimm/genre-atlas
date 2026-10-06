@@ -1,11 +1,12 @@
 import {musicBrainzRequest as mb,normalize,StationError} from "./live-station";
 import {deezer} from "./deezer-catalog";
+import {resolveAlbumArtist,type AlbumArtistChoice,type AlbumIdentityHints} from "./release-identity";
 
 type Raw=Record<string,any>;
 export type ReleaseKind="Album"|"Compilation"|"Mixtape"|"EP"|"Single"|"Live"|"Other";
 export type ReleaseCard={id:string;provider:"musicbrainz"|"deezer";title:string;artist:string;date:string;types:ReleaseKind[];artwork?:string;url:string;fans?:number|null};
-export type ReleaseArtist={id:string;name:string;detail:string};
-export type ReleaseList={artist:string;artistId:string;provider:string;releases:ReleaseCard[];choices:ReleaseArtist[];nextOffset:number|null;total:number;note:string};
+export type ReleaseArtist=AlbumArtistChoice;
+export type ReleaseList={artist:string;artistId:string;provider:string;releases:ReleaseCard[];choices:ReleaseArtist[];nextOffset:number|null;total:number;note:string;identity?:"unique-name"|"album-match"|"selected"};
 export type AlbumTrack={id:string;disc:number;number:string;title:string;artist:string;featuring:string|null;durationMs:number|null};
 export type ReleaseDetail={release:ReleaseCard;edition:string;editionDate:string;tracks:AlbumTrack[];totalTracks:number;complete:boolean;note:string};
 const uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
@@ -24,7 +25,7 @@ function dzCard(r:Raw,artist:string):ReleaseCard{
  let artwork:string|undefined;try{const u=new URL(r.cover_big||r.cover_medium);if(u.protocol==="https:"&&u.hostname.endsWith(".dzcdn.net"))artwork=u.href;}catch{}
  return {id:String(r.id),provider:"deezer",title:r.title,artist:r.artist?.name||artist,date:r.release_date||"",types:releaseTypes(r),artwork,url:"https://www.deezer.com/album/"+r.id,fans:Number.isSafeInteger(r.fans)&&r.fans>=0?r.fans:null};
 }
-export async function artistReleases(name:string,provider:string,id="",offset=0):Promise<ReleaseList>{
+export async function artistReleases(name:string,provider:string,id="",offset=0,hints:AlbumIdentityHints={}):Promise<ReleaseList>{
  if(!name.trim()||name.length>160||!["musicbrainz","deezer"].includes(provider)||!Number.isInteger(offset)||offset<0||offset>10000)throw new StationError("Invalid artist catalog request.",400);
  let artist=name;
  if(provider==="musicbrainz"){
@@ -41,14 +42,15 @@ export async function artistReleases(name:string,provider:string,id="",offset=0)
   return {artist,artistId:id,provider,releases,choices:[],total,nextOffset:offset+100<total?offset+100:null,note:"MusicBrainz overview releases (bootleg-only and promotional-only groups excluded). Types and original dates are source metadata; coverage may be incomplete. A group can have more than one type."};
  }
  if(id&&!integer.test(id))throw new StationError("Invalid Deezer artist.",400);
+ let prefetched:Raw|undefined,identity:ReleaseList["identity"]=id?"selected":undefined;
  if(!id){
   const data=await deezer("search/artist?"+new URLSearchParams({q:name,limit:"25"}));
-  const choices:ReleaseArtist[]=(data.data||[]).filter((a:Raw)=>Number.isSafeInteger(a.id)&&normalize(a.name)===normalize(name)).map((a:Raw)=>({id:String(a.id),name:a.name,detail:"Deezer artist "+a.id}));
-  if(choices.length!==1)return {artist:name,artistId:"",provider,releases:[],choices,nextOffset:null,total:0,note:choices.length?"Choose the correct artist.":"No exact Deezer artist match. Try another artist name or spelling."};
-  id=choices[0].id;artist=choices[0].name;
+  const match=await resolveAlbumArtist(name,data.data||[],hints,id=>deezer("artist/"+id+"/albums?limit=100&index=0"));
+  if(!match.id)return {artist:name,artistId:"",provider,releases:[],choices:match.choices,nextOffset:null,total:0,note:match.choices.length?"Several artists share this name. Compare their releases to choose.":"No exact Deezer artist match. Try another artist name or spelling."};
+  id=match.id;prefetched=offset===0?match.page:undefined;identity=match.identity;
  }
- const data=await deezer("artist/"+id+"/albums?limit=100&index="+offset);
- return {artist,artistId:id,provider,releases:(data.data||[]).map((r:Raw)=>dzCard(r,artist)),choices:[],total:data.total||0,nextOffset:data.next?offset+100:null,note:"Release types and edition dates are supplied by Deezer. Mixtapes may be classified as albums; coverage may be incomplete."};
+ const data=prefetched||await deezer("artist/"+id+"/albums?limit=100&index="+offset);
+ return {artist,artistId:id,provider,identity,releases:(data.data||[]).map((r:Raw)=>dzCard(r,artist)),choices:[],total:data.total||0,nextOffset:data.next?offset+100:null,note:"Release types and edition dates are supplied by Deezer. Mixtapes may be classified as albums; coverage may be incomplete."};
 }
 export function featuring(title:string,credits:Raw[]=[]):string|null{
  const explicit=title.match(/(?:\(|\[|\s)\s*(?:feat\.?|ft\.?|featuring)\s+([^\])]+)(?:\)|\]|$)/i);
