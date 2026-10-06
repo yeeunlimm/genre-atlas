@@ -11,7 +11,7 @@ export function ReleaseCover({release,large=false}:{release:ReleaseCard;large?:b
 }
 const filters:("All"|ReleaseKind)[]=["All","Album","Compilation","Mixtape","EP","Single","Live","Other"];
 const labels:Record<string,string>={All:"All releases",Album:"Albums",Compilation:"Compilations",Mixtape:"Mixtapes",EP:"EPs",Single:"Singles",Live:"Live",Other:"Other"};
-export function ArtistAlbums({artist,restore,onOpenRelease,onRestored}:{artist:{id:string;name:string}|null;restore?:AlbumCatalogView;onOpenRelease?:(view:AlbumCatalogView)=>string|null;onRestored?:()=>void}){
+export function ArtistAlbums({artist,restore,onOpenRelease,onRestored}:{artist:{id:string;name:string}|null;restore?:AlbumCatalogView;onOpenRelease?:(view:AlbumCatalogView)=>string|null;onRestored?:()=>void|(()=>void)}){
  const restored=restore?.artistId===artist?.id?restore:undefined;
  const [data,setData]=useState<ReleaseList|undefined>(restored?.data),[cards,setCards]=useState<ReleaseCard[]>(restored?.cards||[]),[filter,setFilter]=useState<"All"|ReleaseKind>(restored?.filter||"All"),[order,setOrder]=useState<ReleaseOrder>(restored?.order||"popular"),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const request=useRef<AbortController|null>(null);
@@ -22,7 +22,7 @@ export function ArtistAlbums({artist,restore,onOpenRelease,onRestored}:{artist:{
    if(c.signal.aborted)return;setData(d);setCards(old=>[...new Map([...(offset?old:[]),...d.releases].map((r:ReleaseCard)=>[r.id,r])).values()]);
   }catch(e){if(!c.signal.aborted)setError(e instanceof Error?e.message:"Catalog unavailable.");}finally{if(!c.signal.aborted)setBusy(false);}
  }
- useEffect(()=>{if(restored){onRestored?.();return;}setFilter("All");void read();return()=>request.current?.abort();},[artist?.id]);
+ useEffect(()=>{if(restored)return onRestored?.();setFilter("All");void read();return()=>request.current?.abort();},[artist?.id]);
  if(!artist)return <div className="release-empty"><h3>Your next record.</h3><p>Search an artist to explore their releases.</p></div>;
  const filtered=cards.filter(r=>filter==="All"||r.types.includes(filter));
  const hasPopularity=filtered.some(r=>albumFans(r)!==null);

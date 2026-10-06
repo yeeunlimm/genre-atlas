@@ -5,3 +5,4 @@
 @media(max-width:900px){.release-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.record-hero{gap:30px}.record-page{padding:0 24px}.discovery-modes>[role=tablist]{flex-wrap:wrap;height:auto}}
 @media(max-width:600px){.record-page{padding:0 18px}.record-hero{grid-template-columns:1fr;padding:32px 0;gap:26px}.record-hero>.release-cover{max-width:360px;width:100%;justify-self:center}.record-heading h1{font-size:40px}.record-artist{font-size:26px}.record-page .topbar{gap:15px}.release-card h3{font-size:14px}.release-grid{gap:22px 12px}.record-tracks-title h2{font-size:26px}}
 @media(prefers-reduced-motion:reduce){.release-cover img{transition:none}}
+.record-page .topbar{position:sticky;top:0;z-index:20;background:#101011;border-bottom:1px solid #333}.record-back{gap:8px;padding:0 12px;border:1px solid #555;text-decoration:none;white-space:nowrap}.record-back:hover{background:#252526;border-color:#aaa}

@@ -5,7 +5,7 @@ import type {ReleaseOrder} from "./release-order";
 
 export type AlbumCatalogView={artistId:string;data?:ReleaseList;cards:ReleaseCard[];filter:"All"|ReleaseKind;order:ReleaseOrder;releaseId:string;viewportTop:number};
 export type ArtistReturn={query:string;artist:MusicArtist;related:MusicArtist[];genres:Genre[];genreSource:string;genreStatus:string;note:string;provider:"YouTube Music"|"Deezer";catalog:AlbumCatalogView;scrollY:number};
-const PREFIX="genre-atlas:artist-return:",STATE_KEY="genreAtlasArtistReturn",TTL=60*60*1000;
+const PREFIX="genre-atlas:artist-return:",STATE_KEY="genreAtlasArtistReturn",TTL=24*60*60*1000;
 const validKey=(key:string|null):key is string=>!!key&&/^[a-z0-9-]{1,80}$/i.test(key);
 
 // Temporary, tab-local navigation state, not a listening profile or catalog database.
@@ -17,7 +17,9 @@ export function saveArtistReturn(value:ArtistReturn):string|null{
   for(const item of previous.slice(7))sessionStorage.removeItem(item.key);
   const key=crypto.randomUUID();
   sessionStorage.setItem(PREFIX+key,JSON.stringify({version:1,savedAt:Date.now(),...value}));
-  window.history.replaceState({...window.history.state,[STATE_KEY]:key},"");
+  // The URL survives a router replacing history.state, reloads and browser Back.
+  // Store only an opaque tab-local snapshot key here, never the catalog itself.
+  window.history.replaceState({...window.history.state,[STATE_KEY]:key},"",artistReturnHref(value.artist.name,key));
   return key;
  }catch{return null;}
 }
@@ -43,17 +45,36 @@ export function clearArtistReturnMarker(){
 }
 export function artistReturnHref(artist:string,key?:string|null){
  const params=new URLSearchParams({albumArtist:artist});if(validKey(key??null))params.set("return",key!);
- return "/?"+params+"#artist-discover";
+ // A fragment would race the saved card position during hydration.
+ return "/?"+params+(validKey(key??null)?"":"#artist-discover");
 }
 export function canReturnThroughHistory(key:string|null){
  if(!key||!readArtistReturn(key)||window.history.length<2)return false;
- try{const referrer=new URL(document.referrer);return referrer.origin===window.location.origin&&referrer.pathname==="/";}catch{return false;}
+ try{const referrer=new URL(document.referrer);return referrer.origin===window.location.origin&&referrer.pathname==="/"&&referrer.searchParams.get("return")===key;}catch{return false;}
 }
 export function restoreAlbumPosition(view:AlbumCatalogView,scrollY:number){
- const frame=requestAnimationFrame(()=>{
+ let frame=0,stopped=false,started:number|undefined,focused=false;
+ const previous=window.history.scrollRestoration;
+ window.history.scrollRestoration="manual";
+ const events=["wheel","touchstart","pointerdown","keydown"] as const;
+ function stop(){
+  if(stopped)return;stopped=true;cancelAnimationFrame(frame);
+  window.history.scrollRestoration=previous;
+  for(const event of events)window.removeEventListener(event,stop);
+  window.removeEventListener("pagehide",stop);
+ }
+ for(const event of events)window.addEventListener(event,stop,{passive:true});
+ window.addEventListener("pagehide",stop);
+ function align(now:number){
+  if(stopped)return;started??=now;
   const card=document.getElementById("release-"+view.releaseId);
-  card?.focus({preventScroll:true});
-  window.scrollTo({top:Math.max(0,card?window.scrollY+card.getBoundingClientRect().top-view.viewportTop:scrollY),behavior:"instant"});
- });
- return ()=>cancelAnimationFrame(frame);
+  if(card&&!focused){card.focus({preventScroll:true});focused=true;}
+  const top=Math.max(0,card?window.scrollY+card.getBoundingClientRect().top-view.viewportTop:scrollY);
+  if(Math.abs(window.scrollY-top)>1)window.scrollTo({top,behavior:"instant"});
+  // Hydration, browser scroll restoration and fonts can settle after the first
+  // frame. Re-align briefly, but never fight a user's scroll/touch/keyboard.
+  if(now-started<700)frame=requestAnimationFrame(align);else stop();
+ }
+ frame=requestAnimationFrame(align);
+ return stop;
 }

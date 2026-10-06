@@ -99,6 +99,16 @@ export default function Home(){
  },[search]);
  const restoredAlbum=useRef(false);
  useEffect(()=>{
+  let cancel:(()=>void)|undefined;
+  const onPageShow=(event:PageTransitionEvent)=>{
+   if(!event.persisted)return;
+   const previous=readArtistReturn();
+   if(previous){cancel?.();cancel=restoreAlbumPosition(previous.catalog,previous.scrollY);}
+  };
+  window.addEventListener("pageshow",onPageShow);
+  return()=>{window.removeEventListener("pageshow",onPageShow);cancel?.();};
+ },[]);
+ useEffect(()=>{
   if(restoredAlbum.current)return;restoredAlbum.current=true;
   const previous=readArtistReturn();
   if(previous){
@@ -133,7 +143,7 @@ export default function Home(){
  </aside>
  <section className="results" aria-busy={mode!=="albums"&&activeBusy}><div className="results-heading"><div><span className="eyebrow">{mode==="albums"?"02 / THE DISCOGRAPHY":genreMode?"02 / GENRE DISCOVERY":"02 / ARTIST RADIO"}</span><h2>{mode==="albums"?"ALBUMS & MORE":genreMode?(selectedGenre?genreLabel(selectedGenre):"EXPLORE BY GENRE"):"RELATED ARTISTS"}</h2></div>{mode!=="albums"&&<span className="count">{String(visible.length).padStart(2,"0")}<span>ARTISTS</span></span>}</div>
  <Tabs className="discovery-modes" value={mode} onValueChange={value=>setMode(value as "related"|"genre"|"albums")}><TabsList aria-label="Discovery source"><TabsTrigger value="related">Related artists</TabsTrigger><TabsTrigger value="genre">Genre artists</TabsTrigger><TabsTrigger value="albums">Albums</TabsTrigger></TabsList><TabsContent value={mode} key={mode}>
- {mode==="albums"?<ArtistAlbums key={artist?.id||"none"} artist={artist} restore={albumReturn?.catalog} onRestored={()=>{if(albumReturn)restoreAlbumPosition(albumReturn.catalog,albumReturn.scrollY);}} onOpenRelease={catalog=>artist?saveArtistReturn({query,artist,related,genres,genreSource,genreStatus,note,provider:relatedProvider as "YouTube Music"|"Deezer",catalog,scrollY:window.scrollY}):null}/>:<>
+ {mode==="albums"?<ArtistAlbums key={artist?.id||"none"} artist={artist} restore={albumReturn?.catalog} onRestored={()=>{if(albumReturn)return restoreAlbumPosition(albumReturn.catalog,albumReturn.scrollY);}} onOpenRelease={catalog=>artist?saveArtistReturn({query,artist,related,genres,genreSource,genreStatus,note,provider:relatedProvider as "YouTube Music"|"Deezer",catalog,scrollY:window.scrollY}):null}/>:<>
  <p className="source-caption">{genreMode?"NAMUWIKI / GENRE COLLECTION":relatedProvider==="Deezer"?"DEEZER / RELATED ARTISTS":"YOUTUBE MUSIC / FANS MIGHT ALSO LIKE"}</p>
  <Tabs defaultValue="cloud"><div className="view-controls"><TabsList aria-label="Result view"><TabsTrigger value="cloud">Cloud</TabsTrigger><TabsTrigger value="list">List</TabsTrigger></TabsList><span className="metric"><Users size={14}/> {metric}</span></div>
  <div className="busy" aria-live="polite">{activeBusy&&<><LoaderCircle className="spin" size={16}/>{genreMode?"Reading genre artists from NamuWiki…":busy}</>}</div>
