@@ -5,6 +5,11 @@ const cloud=load('artist-discovery'),net=load('music-request');
 const artist=(id,name='Test Artist',fans=100)=>({id,name,nb_fan:fans});
 const ytId='UC'+'a'.repeat(22);
 async function main(){
+ const limits=load('music-timeouts'),timeoutCalls=[],originalTimeout=AbortSignal.timeout;
+ AbortSignal.timeout=ms=>{timeoutCalls.push(ms);return originalTimeout(ms);};
+ assert.equal(limits.YOUTUBE_TIMEOUT_MS,15000);
+ assert(limits.ARTIST_REQUEST_TIMEOUT_MS>=limits.YOUTUBE_TIMEOUT_MS+2*6500,'fallback must fit in server budget');
+ assert(limits.ARTIST_CLIENT_TIMEOUT_MS>limits.ARTIST_REQUEST_TIMEOUT_MS,'browser must outlast server');
  assert.equal(cloud.parseDeezerArtist({id:1}),null);
  assert.equal(cloud.parseDeezerArtist(artist(1)).metric,'deezer-fans');
  assert.equal(cloud.parseDeezerArtist(artist(1,'A',undefined)).provider,'Deezer');
@@ -28,6 +33,9 @@ async function main(){
  await assert.rejects(()=>cloud.artistDiscovery('artist','https://evil.test','Artist'),/Invalid artist/);
  const viaId=await net.musicRequest(()=>cloud.artistDiscovery('artist','deezer:10'));
  assert.equal(viaId.related.length,1,'Deezer cloud artists can be explored directly');
+ assert(timeoutCalls.includes(15000),'YouTube requests receive their 15-second limit');
+ assert(timeoutCalls.includes(6500),'other providers keep their existing limit');
+ AbortSignal.timeout=originalTimeout;
  console.log('PASS: 403 fallback, exact/ambiguous identities, source-vs-empty state, honest fan metric, dedup, direct artist exploration.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

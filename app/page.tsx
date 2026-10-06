@@ -12,11 +12,12 @@ type Artist=MusicArtist&{wiki?:GenreArtist};
 import {englishText} from "@/lib/english-display";
 import {youtubeSearchUrl} from "@/lib/listen-link";
 import {genreLabel,knownGenreLabel,type Genre} from "@/lib/genre-view";
+import {ARTIST_CLIENT_TIMEOUT_MS} from "@/lib/music-timeouts";
 type Result={artist?:Artist;related:Artist[];artists:Artist[];provider:"YouTube Music"|"Deezer";state:"ready"|"empty"|"choose-artist";notice:string;error?:string};
 const compact=(n:number|null)=>n===null?"Unavailable":new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(n);
 const audienceMetric=(a:Artist)=>a.metric==="deezer-fans"?"Deezer fans":"Monthly audience";
 const normalize=(s:string)=>s.toLocaleLowerCase().replace(/[\s._'’()-]/g,"");
-async function music(kind:string,q:string,name=""):Promise<Result>{const r=await fetch("/api/music?"+new URLSearchParams({kind,q,name}),{cache:"no-store",signal:AbortSignal.timeout(24000)});const d=await r.json() as Result;if(!r.ok)throw new Error(r.status===429?"Too many requests. Please try again shortly.":d.error||"Music search is unavailable. Please try again.");return d;}
+async function music(kind:string,q:string,name=""):Promise<Result>{const r=await fetch("/api/music?"+new URLSearchParams({kind,q,name}),{cache:"no-store",signal:AbortSignal.timeout(ARTIST_CLIENT_TIMEOUT_MS)});const d=await r.json() as Result;if(!r.ok)throw new Error(r.status===429?"Too many requests. Please try again shortly.":d.error||"Music search is unavailable. Please try again.");return d;}
 async function getGenres(name:string):Promise<{genres:Genre[];title:string}>{
  const r=await fetch("/api/namu?kind=artist&title="+encodeURIComponent(name),{cache:"no-store"});
  if(!r.ok)throw new Error("Genre source unavailable");

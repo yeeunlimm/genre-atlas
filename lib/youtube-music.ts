@@ -1,5 +1,6 @@
 type Raw=Record<string,any>;
 import {musicPending,musicJson} from "./music-request";
+import {YOUTUBE_TIMEOUT_MS} from "./music-timeouts";
 export type AlbumArtwork={title:string;imageUrl:string};
 export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;metric?:"monthly-audience"|"deezer-fans";provider?:"YouTube Music"|"Deezer";subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
 const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
@@ -62,7 +63,7 @@ export function parseArtist(data:Raw,id:string){
  return {artist,related:related.slice(0,30)};
 }
 async function request(endpoint:"search"|"browse",body:Raw){
- const data=await musicJson("https://music.youtube.com/youtubei/v1/"+endpoint+"?prettyPrint=false","YouTube Music",endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context,...body})}) as Raw;
+ const data=await musicJson("https://music.youtube.com/youtubei/v1/"+endpoint+"?prettyPrint=false","YouTube Music",endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context,...body})},YOUTUBE_TIMEOUT_MS) as Raw;
  if(data.error)throw new MusicError("YouTube Music returned an API error.");
  return data;
 }
