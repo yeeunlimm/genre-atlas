@@ -44,14 +44,14 @@ export function ArtistCdPlayer({artist}:{artist?:MusicArtist|null}){
 
  return <figure ref={element} className="artist-cd-player" data-spinning={inView&&pageVisible&&!paused&&!reducedMotion}
   aria-label={artist?artistName+" album CD player":"CD player with a white disc"}>
-  <div className="cd-player-body">
+  <div className="cd-player-crop"><div className="cd-player-body">
    <img className="cd-player-base" src={playerImage} alt="Vintage translucent CD player" width={1024} height={1536}/>
    <div className="cd-disc-window">
     <DiscArtwork key={(artist?.id||"none")+":"+(album?.imageUrl||"white")} album={album} artistName={artistName}/>
    </div>
    <img className="cd-player-fixture cd-player-fixture-left" src={playerImage} alt="" aria-hidden="true" width={1024} height={1536}/>
    <img className="cd-player-fixture cd-player-fixture-right" src={playerImage} alt="" aria-hidden="true" width={1024} height={1536}/>
-  </div>
+  </div></div>
   <button className="cd-motion-toggle" type="button" aria-pressed={paused} disabled={reducedMotion}
    onClick={()=>setPaused(value=>!value)}>{reducedMotion?"Motion reduced":paused?"Resume rotation":"Pause rotation"}</button>
  </figure>;

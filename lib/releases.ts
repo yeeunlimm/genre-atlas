@@ -4,7 +4,7 @@ import {resolveAlbumArtist,type AlbumArtistChoice,type AlbumIdentityHints} from 
 
 type Raw=Record<string,any>;
 export type ReleaseKind="Album"|"Compilation"|"Mixtape"|"EP"|"Single"|"Live"|"Other";
-export type ReleaseCard={id:string;provider:"musicbrainz"|"deezer";title:string;artist:string;date:string;types:ReleaseKind[];artwork?:string;url:string;fans?:number|null};
+export type ReleaseCard={id:string;provider:"musicbrainz"|"deezer"|"wikipedia"|"namuwiki";title:string;artist:string;date:string;types:ReleaseKind[];artwork?:string;url:string;fans?:number|null};
 export type ReleaseArtist=AlbumArtistChoice;
 export type ReleaseList={artist:string;artistId:string;provider:string;releases:ReleaseCard[];choices:ReleaseArtist[];nextOffset:number|null;total:number;note:string;identity?:"unique-name"|"album-match"|"selected"};
 export type AlbumTrack={id:string;disc:number;number:string;title:string;artist:string;featuring:string|null;durationMs:number|null};
