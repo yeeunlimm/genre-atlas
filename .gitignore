@@ -45,3 +45,8 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+/.venv-ranking/
+/ml-runs/
+/catboost_info/
+__pycache__/
+*.pyc
