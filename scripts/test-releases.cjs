@@ -25,6 +25,8 @@ const r=m.exports;
  const album=await r.albumDetail("musicbrainz",uuid);assert.equal(album.tracks.length,2);assert.equal(album.tracks[1].disc,2);assert.equal(album.tracks[1].durationMs,null);assert.equal(album.complete,true);assert.equal(album.release.date,"2000");assert.equal(album.editionDate,"2001");
  responses=[{id:1,title:"Album",artist:{name:"Artist"},release_date:"2022",nb_tracks:2,tracks:{data:[{id:1,title:"First",duration:60}],next:"more"}},{data:[{id:2,title:"Second",duration:75}]}];
  const dz=await r.albumDetail("deezer","1");assert.equal(dz.tracks.length,2);assert.equal(dz.complete,true);assert.equal(dz.tracks[1].durationMs,75000);
+ responses=[{data:[{id:1,title:"Known",fans:42},{id:2,title:"Zero",fans:0},{id:3,title:"Missing"},{id:4,title:"Invalid",fans:-1}],total:4}];
+ const counts=await r.artistReleases("Artist","deezer","1");assert.deepEqual(counts.releases.map(x=>x.fans),[42,0,null,null]);
  await assert.rejects(r.albumDetail("musicbrainz","../../secret"));await assert.rejects(r.artistReleases("Artist","evil"));
  console.log("PASS: release classifications, ambiguous identities, pagination, featuring, multidisc tracks, dates, unknown duration and validated IDs.");
 })().catch(e=>{console.error(e);process.exit(1);});

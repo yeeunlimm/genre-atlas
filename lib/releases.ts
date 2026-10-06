@@ -3,7 +3,7 @@ import {deezer} from "./deezer-catalog";
 
 type Raw=Record<string,any>;
 export type ReleaseKind="Album"|"Compilation"|"Mixtape"|"EP"|"Single"|"Live"|"Other";
-export type ReleaseCard={id:string;provider:"musicbrainz"|"deezer";title:string;artist:string;date:string;types:ReleaseKind[];artwork?:string;url:string};
+export type ReleaseCard={id:string;provider:"musicbrainz"|"deezer";title:string;artist:string;date:string;types:ReleaseKind[];artwork?:string;url:string;fans?:number|null};
 export type ReleaseArtist={id:string;name:string;detail:string};
 export type ReleaseList={artist:string;artistId:string;provider:string;releases:ReleaseCard[];choices:ReleaseArtist[];nextOffset:number|null;total:number;note:string};
 export type AlbumTrack={id:string;disc:number;number:string;title:string;artist:string;featuring:string|null;durationMs:number|null};
@@ -22,7 +22,7 @@ export function releaseTypes(r:Raw):ReleaseKind[]{
 function mbCard(r:Raw,artist:string):ReleaseCard{return {id:r.id,provider:"musicbrainz",title:r.title,artist:names(r)||artist,date:r["first-release-date"]||"",types:releaseTypes(r),artwork:"https://coverartarchive.org/release-group/"+r.id+"/front-250",url:"https://musicbrainz.org/release-group/"+r.id};}
 function dzCard(r:Raw,artist:string):ReleaseCard{
  let artwork:string|undefined;try{const u=new URL(r.cover_big||r.cover_medium);if(u.protocol==="https:"&&u.hostname.endsWith(".dzcdn.net"))artwork=u.href;}catch{}
- return {id:String(r.id),provider:"deezer",title:r.title,artist:r.artist?.name||artist,date:r.release_date||"",types:releaseTypes(r),artwork,url:"https://www.deezer.com/album/"+r.id};
+ return {id:String(r.id),provider:"deezer",title:r.title,artist:r.artist?.name||artist,date:r.release_date||"",types:releaseTypes(r),artwork,url:"https://www.deezer.com/album/"+r.id,fans:Number.isSafeInteger(r.fans)&&r.fans>=0?r.fans:null};
 }
 export async function artistReleases(name:string,provider:string,id="",offset=0):Promise<ReleaseList>{
  if(!name.trim()||name.length>160||!["musicbrainz","deezer"].includes(provider)||!Number.isInteger(offset)||offset<0||offset>10000)throw new StationError("Invalid artist catalog request.",400);
@@ -44,11 +44,11 @@ export async function artistReleases(name:string,provider:string,id="",offset=0)
  if(!id){
   const data=await deezer("search/artist?"+new URLSearchParams({q:name,limit:"25"}));
   const choices:ReleaseArtist[]=(data.data||[]).filter((a:Raw)=>Number.isSafeInteger(a.id)&&normalize(a.name)===normalize(name)).map((a:Raw)=>({id:String(a.id),name:a.name,detail:"Deezer artist "+a.id}));
-  if(choices.length!==1)return {artist:name,artistId:"",provider,releases:[],choices,nextOffset:null,total:0,note:choices.length?"Choose the correct artist.":"No exact Deezer artist match. Try MusicBrainz."};
+  if(choices.length!==1)return {artist:name,artistId:"",provider,releases:[],choices,nextOffset:null,total:0,note:choices.length?"Choose the correct artist.":"No exact Deezer artist match. Try another artist name or spelling."};
   id=choices[0].id;artist=choices[0].name;
  }
  const data=await deezer("artist/"+id+"/albums?limit=100&index="+offset);
- return {artist,artistId:id,provider,releases:(data.data||[]).map((r:Raw)=>dzCard(r,artist)),choices:[],total:data.total||0,nextOffset:data.next?offset+100:null,note:"Deezer release types and edition dates. Mixtapes may be classified as albums here; use MusicBrainz for additional classifications."};
+ return {artist,artistId:id,provider,releases:(data.data||[]).map((r:Raw)=>dzCard(r,artist)),choices:[],total:data.total||0,nextOffset:data.next?offset+100:null,note:"Release types and edition dates are supplied by Deezer. Mixtapes may be classified as albums; coverage may be incomplete."};
 }
 export function featuring(title:string,credits:Raw[]=[]):string|null{
  const explicit=title.match(/(?:\(|\[|\s)\s*(?:feat\.?|ft\.?|featuring)\s+([^\])]+)(?:\)|\]|$)/i);
