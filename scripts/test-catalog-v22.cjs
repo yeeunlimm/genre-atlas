@@ -9,6 +9,9 @@ async function main(){
   global.fetch=async(input)=>{requests++;const url=new URL(input);if(url.pathname.endsWith('/related'))return Response.json({data:[{id:20,name:'Artist 20'},{id:30,name:'Artist 30'}],total:2});if(url.pathname.includes('/20/'))return Response.json({data:[row(2),row(3),row(4,999)]});return Response.json({data:[row(5,30)]});};
   const result=await net.musicRequest(()=>sources.deezerRelated(seed));assert.equal(result.state,'ready');assert.equal(result.rows.length,3);assert(!result.rows.some(r=>r.track.artistId==='deezer:999'));
   assert.equal(h.rankCandidates(result.rows,[seed],h.blankMemory()).length,2,'one song per artist');
+  const mbId='11111111-1111-1111-1111-111111111111';
+  global.fetch=async()=>Response.json({relations:[{url:{resource:'https://www.deezer.com/artist/12345'}},{url:{resource:'https://evil.example/artist/999'}}]});
+  assert.equal(await net.musicRequest(()=>load('live-station').musicBrainzDeezerArtist(mbId)),'12345','use only explicit trusted artist cross-links');
   const duplicate={...seed,id:'itunes:1',recordingId:'itunes:1',catalogKind:'apple'};
   assert.equal(search.mergeSearch([seed,duplicate],'Song 1').length,1);
   assert.equal(search.mergeSearch([seed,{...duplicate,album:'Different Album'}],'Song 1').length,2,'preserve real album editions');

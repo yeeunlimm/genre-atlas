@@ -1,4 +1,4 @@
-import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError,rememberTracks} from "./live-station";
+import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError,rememberTracks,musicBrainzDeezerArtist} from "./live-station";
 import {deezer,deezerArtist,parseDeezer} from "./deezer-catalog";
 import {logMusicError,musicAborted} from "./music-request";
 import {music, type MusicArtist} from "./youtube-music";
@@ -22,7 +22,7 @@ export async function catalog(artist:string,title?:string):Promise<{tracks:Stati
   catch{throw new StationError(appleFailed?"Apple and MusicBrainz catalogs could not load. Retry shortly.":"No exact Apple match; the alternate catalog could not load. Retry shortly.");}
 }
 export async function deezerRelated(seed:StationTrack,offset=0):Promise<SourceResult>{
-  const id=await deezerArtist(seed);
+  const id=await deezerArtist(seed)||await musicBrainzDeezerArtist(seed.artistId);
   if(!id)return {rows:[],state:"empty",note:"No exact Deezer song-and-artist match.",nextOffset:null};
   const related=await deezer(`artist/${id}/related?limit=6&index=${offset}`);
   const peers=(related.data||[]).filter((a:any)=>Number.isSafeInteger(a.id)&&typeof a.name==="string");

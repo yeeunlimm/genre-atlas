@@ -40,6 +40,13 @@ async function json(url:string,mb=false):Promise<Raw>{
   return run();
 }
 const mb=(path:string)=>cached("mb:"+path,3600_000,()=>json("https://musicbrainz.org/ws/2/"+path+(path.includes("?")?"&":"?")+"fmt=json",true));
+export async function musicBrainzDeezerArtist(artistId:string):Promise<string|null>{
+  const id=artistId.replace(/^mb:/,"");if(!uuid.test(id))return null;
+  const doc=await mb("artist/"+id+"?inc=url-rels");
+  const ids=new Set<string>();
+  for(const relation of doc.relations||[]){try{const u=new URL(relation.url?.resource);const match=u.pathname.match(/^\/(?:[a-z]{2}\/)?artist\/(\d{1,16})\/?$/);if(u.protocol==="https:"&&["deezer.com","www.deezer.com"].includes(u.hostname)&&match)ids.add(match[1]);}catch{}}
+  return ids.size===1?[...ids][0]:null;
+}
 export const apple=(path:string)=>cached("apple:"+path,900_000,()=>json("https://itunes.apple.com/"+path));
 const quote=(s:string)=>'"'+s.replace(/["\\]/g," ")+'"';
 const artistNames=(r:Raw)=>(r["artist-credit"]||[]).map((a:Raw)=>(a.name||a.artist?.name||"")+ (a.joinphrase||"")).join("");
