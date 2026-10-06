@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import type {ReleaseCard,ReleaseList,ReleaseKind} from "@/lib/releases";
 import {albumFans,orderReleases,type ReleaseOrder} from "@/lib/release-order";
+import type {AlbumCatalogView} from "@/lib/artist-return";
 
 export function ReleaseCover({release,large=false}:{release:ReleaseCard;large?:boolean}){
  const [failed,setFailed]=useState(false);
@@ -10,8 +11,9 @@ export function ReleaseCover({release,large=false}:{release:ReleaseCard;large?:b
 }
 const filters:("All"|ReleaseKind)[]=["All","Album","Compilation","Mixtape","EP","Single","Live","Other"];
 const labels:Record<string,string>={All:"All releases",Album:"Albums",Compilation:"Compilations",Mixtape:"Mixtapes",EP:"EPs",Single:"Singles",Live:"Live",Other:"Other"};
-export function ArtistAlbums({artist}:{artist:{id:string;name:string}|null}){
- const [data,setData]=useState<ReleaseList>(),[cards,setCards]=useState<ReleaseCard[]>([]),[filter,setFilter]=useState<"All"|ReleaseKind>("All"),[order,setOrder]=useState<ReleaseOrder>("popular"),[busy,setBusy]=useState(false),[error,setError]=useState("");
+export function ArtistAlbums({artist,restore,onOpenRelease,onRestored}:{artist:{id:string;name:string}|null;restore?:AlbumCatalogView;onOpenRelease?:(view:AlbumCatalogView)=>string|null;onRestored?:()=>void}){
+ const restored=restore?.artistId===artist?.id?restore:undefined;
+ const [data,setData]=useState<ReleaseList|undefined>(restored?.data),[cards,setCards]=useState<ReleaseCard[]>(restored?.cards||[]),[filter,setFilter]=useState<"All"|ReleaseKind>(restored?.filter||"All"),[order,setOrder]=useState<ReleaseOrder>(restored?.order||"popular"),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const request=useRef<AbortController|null>(null);
  async function read(id="",offset=0){
   if(!artist)return;request.current?.abort();const c=new AbortController();request.current=c;setBusy(true);setError("");
@@ -20,7 +22,7 @@ export function ArtistAlbums({artist}:{artist:{id:string;name:string}|null}){
    if(c.signal.aborted)return;setData(d);setCards(old=>[...new Map([...(offset?old:[]),...d.releases].map((r:ReleaseCard)=>[r.id,r])).values()]);
   }catch(e){if(!c.signal.aborted)setError(e instanceof Error?e.message:"Catalog unavailable.");}finally{if(!c.signal.aborted)setBusy(false);}
  }
- useEffect(()=>{setFilter("All");void read();return()=>request.current?.abort();},[artist?.id]);
+ useEffect(()=>{if(restored){onRestored?.();return;}setFilter("All");void read();return()=>request.current?.abort();},[artist?.id]);
  if(!artist)return <div className="release-empty"><h3>Your next record.</h3><p>Search an artist to explore their releases.</p></div>;
  const filtered=cards.filter(r=>filter==="All"||r.types.includes(filter));
  const hasPopularity=filtered.some(r=>albumFans(r)!==null);
@@ -32,7 +34,11 @@ export function ArtistAlbums({artist}:{artist:{id:string;name:string}|null}){
   <div className="release-filters" aria-label="Release types">{filters.map(f=><button key={f} aria-pressed={filter===f} onClick={()=>setFilter(f)}>{labels[f]}{f!=="All"&&<small>{cards.filter(r=>r.types.includes(f)).length}</small>}</button>)}</div>
   {data?.choices.length? <div className="release-choices"><h3>Choose the artist</h3>{data.choices.map(a=><button key={a.id} onClick={()=>void read(a.id)}><b>{a.name}</b><span>{a.detail||"No disambiguation supplied"} · {a.id}</span></button>)}</div>:null}
   {error&&<div role="alert" className="release-empty"><p>{error}</p><button onClick={()=>void read(data?.artistId||"")}>Retry catalog</button></div>}
-  <div className="release-grid" aria-busy={busy}>{visible.map(r=><a className="release-card" href={"/album?"+new URLSearchParams({provider:r.provider,id:r.id,artist:artist.name})} key={r.id}><ReleaseCover key={r.artwork||r.id} release={r}/><h3>{r.title}</h3><p>{r.date||"Date unavailable"}<span>{r.types.join(" / ")}</span>{effectiveOrder==="popular"&&<span>{albumFans(r)===null?"Fan count unavailable":albumFans(r)!.toLocaleString("en-US")+" Deezer fans"}</span>}</p></a>)}</div>
+  <div className="release-grid" aria-busy={busy}>{visible.map(r=><a className="release-card" id={"release-"+r.id} href={"/album?"+new URLSearchParams({provider:r.provider,id:r.id,artist:artist.name})} key={r.id} onClick={event=>{
+   if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||!onOpenRelease)return;
+   const key=onOpenRelease({artistId:artist.id,data,cards,filter,order,releaseId:r.id,viewportTop:event.currentTarget.getBoundingClientRect().top});
+   if(key){event.preventDefault();const url=new URL(event.currentTarget.href);url.searchParams.set("return",key);window.location.assign(url.pathname+url.search);}
+  }}><ReleaseCover key={r.artwork||r.id} release={r}/><h3>{r.title}</h3><p>{r.date||"Date unavailable"}<span>{r.types.join(" / ")}</span>{effectiveOrder==="popular"&&<span>{albumFans(r)===null?"Fan count unavailable":albumFans(r)!.toLocaleString("en-US")+" Deezer fans"}</span>}</p></a>)}</div>
   {busy&&<p role="status" className="release-note">Finding releases…</p>}
   {!busy&&!error&&!visible.length&&!data?.choices.length&&<div className="release-empty"><h3>No {filter==="All"?"releases":labels[filter].toLowerCase()} found here.</h3><p>{cards.length?"Choose another release type.":"Try another artist name or spelling. A missing result does not mean the artist has no releases."}</p></div>}
   {data?.nextOffset!=null&&<button className="release-more" disabled={busy} onClick={()=>void read(data.artistId,data.nextOffset!)}>Load more releases</button>}

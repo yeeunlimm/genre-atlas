@@ -5,6 +5,7 @@ import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription} from "@/comp
 import {Tabs,TabsList,TabsTrigger,TabsContent} from "@/components/ui/tabs";
 import {AlbumWall} from "@/components/album-wall";
 import {ArtistAlbums} from "@/components/artist-albums";
+import {saveArtistReturn,readArtistReturn,clearArtistReturnMarker,restoreAlbumPosition,type ArtistReturn} from "@/lib/artist-return";
 import {CassetteCollage} from "@/components/cassette-collage";
 import {DiscoveryStation} from "@/components/discovery-station";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
@@ -37,6 +38,7 @@ export default function Home(){
  const [busy,setBusy]=useState(""),[error,setError]=useState(""),[note,setNote]=useState(""),[detail,setDetail]=useState<Artist|null>(null);
  const [relatedProvider,setRelatedProvider]=useState("YouTube Music"),[fallbackChoices,setFallbackChoices]=useState<Artist[]>([]);
  const [mode,setMode]=useState<"related"|"genre"|"albums">("related"),[selectedGenre,setSelectedGenre]=useState<Genre|null>(null);
+ const [albumReturn,setAlbumReturn]=useState<ArtistReturn|null>(null);
  const [genrePage,setGenrePage]=useState<GenrePage|null>(null),[genreArtists,setGenreArtists]=useState<GenreArtist[]>([]),[genreBusy,setGenreBusy]=useState(false),[genreError,setGenreError]=useState("");
  const run=useRef(0),genreRun=useRef(0),genreRequest=useRef<AbortController|null>(null);
  useEffect(()=>{
@@ -55,6 +57,7 @@ export default function Home(){
  const resetGenre=useCallback(()=>{++genreRun.current;genreRequest.current?.abort();setMode("related");setSelectedGenre(null);setGenrePage(null);setGenreArtists([]);setGenreBusy(false);setGenreError("");},[]);
  useEffect(()=>()=>{genreRequest.current?.abort();},[]);
  const selectArtist=useCallback(async(a:Artist,initialMode:"related"|"albums"="related")=>{
+  clearArtistReturnMarker();setAlbumReturn(null);
   const token=++run.current;resetGenre();setBusy("Finding related artists…");setError("");setNote("");setCandidates([]);setFallbackChoices([]);setRelatedProvider(a.provider||"YouTube Music");setArtist(a);setRelated([]);setGenres([]);setGenreSource("");setGenreStatus("Checking genres…");
   setMode(initialMode);
   void getGenres(a.name).then(d=>{if(token!==run.current)return;setGenres(d.genres);setGenreSource("https://namu.wiki/w/"+encodeURIComponent(d.title));setGenreStatus(d.genres.length?"":"No genre tags found. Related artists are still available.");}).catch(()=>{if(token===run.current)setGenreStatus("Genre source unavailable. Related artists are still available.");});
@@ -64,6 +67,7 @@ export default function Home(){
  },[resetGenre]);
  const search=useCallback(async(name:string,displayName=name,initialMode:"related"|"albums"="related")=>{
   if(!name.trim()){setError("Enter an artist name.");return {ok:false};}
+  clearArtistReturnMarker();setAlbumReturn(null);
   const token=++run.current;resetGenre();setQuery(displayName);setBusy("Searching artists…");setError("");setNote("");setCandidates([]);setFallbackChoices([]);setArtist(null);setRelated([]);setGenres([]);setGenreSource("");setGenreStatus("Select an artist from the results.");
   try{const d=await music("search",name.trim());if(token!==run.current)return {ok:false};
    if(!d.artists.length){setNote("No artists found. Try a different spelling.");return {ok:false};}
@@ -94,7 +98,14 @@ export default function Home(){
   const c=new AbortController();try{Promise.resolve(ctx.registerTool({name:"search_artist",description:"Search YouTube Music artists and display related artists.",inputSchema:{type:"object",properties:{name:{type:"string"}},required:["name"],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async(x:{name:string})=>{if(typeof x?.name!=="string"||!x.name.trim()||x.name.length>100)throw new Error("Artist name must be 1–100 characters.");return search(x.name);}},{signal:c.signal})).catch(()=>{});}catch{}return()=>c.abort();
  },[search]);
  const restoredAlbum=useRef(false);
- useEffect(()=>{if(restoredAlbum.current)return;restoredAlbum.current=true;const name=new URLSearchParams(window.location.search).get("albumArtist");if(name&&name.length<=100)void search(name,name,"albums");},[search]);
+ useEffect(()=>{
+  if(restoredAlbum.current)return;restoredAlbum.current=true;
+  const previous=readArtistReturn();
+  if(previous){
+   ++run.current;setQuery(previous.query);setArtist(previous.artist);setRelated(previous.related);setGenres(previous.genres);setGenreSource(previous.genreSource);setGenreStatus(previous.genreStatus);setRelatedProvider(previous.provider);setNote(previous.note);setMode("albums");setAlbumReturn(previous);return;
+  }
+  const name=new URLSearchParams(window.location.search).get("albumArtist");if(name&&name.length<=100)void search(name,name,"albums");
+ },[search]);
  const genreMode=mode==="genre";
  const visible:Artist[]=genreMode?genreArtists.map(a=>({id:"wiki:"+a.id,name:a.name,audience:null,audienceLabel:"",url:a.url,checkedAt:a.checkedAt,wiki:a})):related;
  const score=(a:Artist)=>a.wiki?a.wiki.stars:a.audience;
@@ -122,7 +133,7 @@ export default function Home(){
  </aside>
  <section className="results" aria-busy={mode!=="albums"&&activeBusy}><div className="results-heading"><div><span className="eyebrow">{mode==="albums"?"02 / THE DISCOGRAPHY":genreMode?"02 / GENRE DISCOVERY":"02 / ARTIST RADIO"}</span><h2>{mode==="albums"?"ALBUMS & MORE":genreMode?(selectedGenre?genreLabel(selectedGenre):"EXPLORE BY GENRE"):"RELATED ARTISTS"}</h2></div>{mode!=="albums"&&<span className="count">{String(visible.length).padStart(2,"0")}<span>ARTISTS</span></span>}</div>
  <Tabs className="discovery-modes" value={mode} onValueChange={value=>setMode(value as "related"|"genre"|"albums")}><TabsList aria-label="Discovery source"><TabsTrigger value="related">Related artists</TabsTrigger><TabsTrigger value="genre">Genre artists</TabsTrigger><TabsTrigger value="albums">Albums</TabsTrigger></TabsList><TabsContent value={mode} key={mode}>
- {mode==="albums"?<ArtistAlbums key={artist?.id||"none"} artist={artist}/>:<>
+ {mode==="albums"?<ArtistAlbums key={artist?.id||"none"} artist={artist} restore={albumReturn?.catalog} onRestored={()=>{if(albumReturn)restoreAlbumPosition(albumReturn.catalog,albumReturn.scrollY);}} onOpenRelease={catalog=>artist?saveArtistReturn({query,artist,related,genres,genreSource,genreStatus,note,provider:relatedProvider as "YouTube Music"|"Deezer",catalog,scrollY:window.scrollY}):null}/>:<>
  <p className="source-caption">{genreMode?"NAMUWIKI / GENRE COLLECTION":relatedProvider==="Deezer"?"DEEZER / RELATED ARTISTS":"YOUTUBE MUSIC / FANS MIGHT ALSO LIKE"}</p>
  <Tabs defaultValue="cloud"><div className="view-controls"><TabsList aria-label="Result view"><TabsTrigger value="cloud">Cloud</TabsTrigger><TabsTrigger value="list">List</TabsTrigger></TabsList><span className="metric"><Users size={14}/> {metric}</span></div>
  <div className="busy" aria-live="polite">{activeBusy&&<><LoaderCircle className="spin" size={16}/>{genreMode?"Reading genre artists from NamuWiki…":busy}</>}</div>
