@@ -7,7 +7,8 @@ const artistKey=(s:string)=>["ye","kanyewest"].includes(normalize(s))?"kanyewest
 export function cassetteAlbums(artist?:ArtistAlbums|null):AlbumArtwork[]{
  // Before a search, show a sample from the existing collection. After selection,
  // never substitute a different artist's artwork when album data is unavailable.
- const curated=artist?collection.albums.filter(a=>artistKey(a.artist)===artistKey(artist.name)):collection.albums.slice(0,4);
+ const covers=[...collection.albums,...collection.rightColumn];
+ const curated=artist?covers.filter(a=>artistKey(a.artist)===artistKey(artist.name)):covers.slice(0,4);
  const candidates=artist?[...(artist.albumArtworks||[]),...(artist.albumArtwork?[artist.albumArtwork]:[]),...curated]:curated;
  const seen=new Set<string>();
  return candidates.filter(album=>{

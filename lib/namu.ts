@@ -106,7 +106,8 @@ export function parseDocument(html:string,requested:string,kind:string){
  const artistPages=links($,$("body")).filter(x=>x.title.startsWith(rootTitle+"/")&&/(래퍼|뮤지션|음악가|가수|밴드)/.test(x.title.slice(rootTitle.length+1))).slice(0,2);
  return {name:title,title,englishName,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
 }
-async function fetchDocument(title:string,search=false,signal?:AbortSignal){
+export async function fetchNamuDocument(title:string,search=false,signal?:AbortSignal){
+ title=validTitle(title);
  let current=search?"https://namu.wiki/Search?q="+encodeURIComponent(title):"https://namu.wiki/w/"+encodeURIComponent(title);
  for(let redirects=0;redirects<4;redirects++){
   const timeout=AbortSignal.timeout(12000);
@@ -125,6 +126,7 @@ async function fetchDocument(title:string,search=false,signal?:AbortSignal){
  }
  throw new NamuError("문서 이동이 너무 많습니다. 최종 문서명을 직접 입력해 주세요.");
 }
+const fetchDocument=fetchNamuDocument;
 export async function getNamu(title:string,kind:string){
  title=validTitle(title);const key=kind+":"+title,cached=cache.get(key);if(cached&&cached.expires>Date.now())return cached.data;
  if(inflight.has(key))return inflight.get(key);

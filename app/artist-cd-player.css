@@ -1,0 +1,22 @@
+.artist-cd-player{width:min(100%,260px);margin:8px auto 18px;isolation:isolate}
+.cd-player-crop{position:relative;aspect-ratio:1.04;overflow:hidden}
+.cd-player-body{position:absolute;left:-5%;top:-6%;width:110%;aspect-ratio:2/3}
+.cd-player-base{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(1)}
+.cd-disc-window{position:absolute;left:13.28125%;top:8.59375%;width:73.4375%;aspect-ratio:1;border-radius:50%;overflow:hidden}
+.cd-rotor{display:block;position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;animation:artist-disc-spin 20s linear infinite;animation-play-state:paused}
+.artist-cd-player[data-spinning=true] .cd-rotor{animation-play-state:running}
+/* Reuse the clean lower half of the real disc twice, so no corner hardware rotates. */
+.cd-white-disc{position:absolute;inset:0;overflow:hidden;border-radius:50%;clip-path:polygon(0 49.9%,100% 49.9%,100% 100%,0 100%)}
+.cd-white-disc-top{transform:rotate(180deg)}
+.cd-white-disc img{position:absolute;max-width:none;width:136.170213%;height:auto;left:-18.085106%;top:-17.553191%;filter:grayscale(1)}
+.cd-album-image{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;border-radius:50%;opacity:0;filter:grayscale(.45) saturate(.75);mask-image:radial-gradient(circle closest-side,transparent 0 31%,#000 32%);-webkit-mask-image:radial-gradient(circle closest-side,transparent 0 31%,#000 32%)}
+.cd-album-image.is-loaded{opacity:1}
+/* The two corner labels stay in front of the rotating disc. */
+.cd-player-fixture{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;filter:grayscale(1)}
+.cd-player-fixture-left{clip-path:polygon(4.8% 3.5%,23.6% 3.5%,23.6% 20.9%,19.1% 24%,8.5% 24%,7.5% 22.5%,7.5% 7.5%,4.8% 7.5%)}
+.cd-player-fixture-right{clip-path:polygon(76.8% 5.7%,93.6% 5.7%,93.6% 20.9%,91.9% 22.2%,83.7% 22.2%,76.8% 16%)}
+.cd-motion-toggle{display:block;margin:4px auto 0;padding:10px 12px;min-height:44px;border:0;background:transparent;color:#bbb;font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.cd-motion-toggle:hover{color:#fff}.cd-motion-toggle:focus-visible{outline:2px solid #eee;outline-offset:2px}.cd-motion-toggle:disabled{cursor:default;opacity:.7;text-decoration:none}
+@keyframes artist-disc-spin{to{transform:rotate(360deg)}}
+@media(max-width:640px){.artist-cd-player{width:min(100%,235px)}}
+@media(prefers-reduced-motion:reduce){.artist-cd-player .cd-rotor{animation:none}}

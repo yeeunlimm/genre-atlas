@@ -137,10 +137,11 @@
       "verified": true
     },
     {
-      "artist": "JID",
-      "title": "God Does Like Ugly",
-      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7b/e1/66/7be166a3-92e6-c505-0802-9599973629ea/25UMGIM55109.rgb.jpg/600x600bf-60.jpg",
-      "sourceUrl": "https://music.apple.com/us/album/god-does-like-ugly/1812517697",
+      "artist": "Måneskin",
+      "title": "RUSH!",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/54/58/fc/5458fcb2-df7c-40d4-580b-305b9baad56a/196589243300.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/rush/1659658389",
+      "checkedAt": "2026-10-06",
       "verified": true
     },
     {
@@ -176,6 +177,40 @@
       "title": "LONG.LIVE.A$AP",
       "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/50/b3/9d/50b39db3-0922-2863-37aa-37b9a47f7ad7/886443325524.jpg/600x600bf-60.jpg",
       "sourceUrl": "https://music.apple.com/us/album/long-live-a%24ap/581997129",
+      "verified": true
+    }
+  ],
+  "rightColumn": [
+    {
+      "artist": "Young Thug",
+      "title": "Slime Season 3",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/f5/b6/cb/f5b6cb03-8f8a-0529-16a6-b8cf3ace5555/dj.vftjpvpa.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/slime-season-3/1095065232",
+      "checkedAt": "2026-10-06",
+      "verified": true
+    },
+    {
+      "artist": "Radiohead",
+      "title": "The Bends",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1b/a9/5c/1ba95cac-b245-d386-63fb-6b857aa9dce8/634904078065.png/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/the-bends/1097862703",
+      "checkedAt": "2026-10-06",
+      "verified": true
+    },
+    {
+      "artist": "SZA",
+      "title": "SOS",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/62/93/13/6293132e-20ff-67ab-3d1f-96bb6797a6ba/196589564955.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/sos/1658650093",
+      "checkedAt": "2026-10-06",
+      "verified": true
+    },
+    {
+      "artist": "Blur",
+      "title": "The Ballad of Darren",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/25/5e/55/255e55f8-46d3-ebeb-c742-d67aa2181093/5054197688263.jpg/600x600bf-60.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/the-ballad-of-darren/1688020024",
+      "checkedAt": "2026-10-06",
       "verified": true
     }
   ]

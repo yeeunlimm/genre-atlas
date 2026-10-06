@@ -43,13 +43,14 @@ export function routeWeights(memory:Memory):Record<Route,number> {
     return [route,Math.max(.35,Math.min(1.65,2*(2+likes)/(4+likes+dislikes)))];
   })) as Record<Route,number>;
 }
-export function rankCandidates(rows:Candidate[],seeds:StationTrack[],memory:Memory,consumed:StationTrack[]=[],now=Date.now()):Candidate[]{
+export function rankCandidates(rows:Candidate[],seeds:StationTrack[],memory:Memory,consumed:StationTrack[]=[],now=Date.now(),learnedScore?:(row:Candidate)=>number):Candidate[]{
   const weights=routeWeights(memory);
   const ranked=mergeCandidates(rows).filter(r=>!excluded(r.track,seeds)&&memory.votes[songKey(r.track)]?.vote!=="dislike"&&!(memory.recent[songKey(r.track)]>now-COOLDOWN))
     .map(r=>{
       const perRoute=routes.map(route=>Math.max(0,...r.paths.filter(p=>p.route===route).map(p=>p.confidence))*weights[route]).sort((a,b)=>b-a);
       const coverage=new Set(r.paths.map(p=>p.seedId)).size;
-      return {...r,score:perRoute[0]+.2*perRoute.slice(1).reduce((a,b)=>a+b,0)+.08*Math.max(0,coverage-1),feedbackBoost:r.paths.some(p=>weights[p.route]!==1)};
+      const learned=learnedScore?.(r);
+      return {...r,score:learned!==undefined&&Number.isFinite(learned)?learned:perRoute[0]+.2*perRoute.slice(1).reduce((a,b)=>a+b,0)+.08*Math.max(0,coverage-1),feedbackBoost:!!learnedScore||r.paths.some(p=>weights[p.route]!==1)};
     }).sort((a,b)=>b.score-a.score||songKey(a.track).localeCompare(songKey(b.track)));
   return onePerArtist(ranked,consumed) as Candidate[];
 }

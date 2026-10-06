@@ -1,9 +1,8 @@
 type Raw=Record<string,any>;
-import {musicPending,musicJson} from "./music-request";
-import {YOUTUBE_TIMEOUT_MS} from "./music-timeouts";
+import {musicPending} from "./music-request";
+import {youtubeRequest as request} from "./youtube-client";
 export type AlbumArtwork={title:string;imageUrl:string};
 export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;metric?:"monthly-audience"|"deezer-fans";provider?:"YouTube Music"|"Deezer";subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
-const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
 const cache=new Map<string,{expires:number;data:unknown}>();
 export class MusicError extends Error{constructor(message:string,public status=502){super(message);}}
 export function parseCount(value:string):number|null{
@@ -33,7 +32,7 @@ export function parseSearch(data:Raw){
 }
 export function parseArtist(data:Raw,id:string){
  const h=data.header?.musicImmersiveHeaderRenderer||data.header?.musicVisualHeaderRenderer||data.header?.musicHeaderRenderer;
- if(!h||!text(h.title))throw new MusicError("아티스트 페이지를 읽지 못했습니다. 다른 검색 결과를 선택해 주세요.");
+ if(!h||!text(h.title))throw new MusicError("YouTube Music returned an unreadable artist page. Try another search result.");
  const name=text(h.title),audienceLabel=text(h.monthlyListenerCount);
  const artist:MusicArtist={id,name,audience:audienceLabel?parseCount(audienceLabel):null,audienceLabel,subscribers:parseCount(text(h.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText)),url:"https://music.youtube.com/channel/"+id,checkedAt:new Date().toISOString()};
  const related:MusicArtist[]=[];
@@ -61,11 +60,6 @@ export function parseArtist(data:Raw,id:string){
   for(const row of shelf.contents||[]){const a=artistRow(row.musicTwoRowItemRenderer||{});if(a&&a.id!==id&&!related.some(x=>x.id===a.id))related.push(a);}
  }
  return {artist,related:related.slice(0,30)};
-}
-async function request(endpoint:"search"|"browse",body:Raw){
- const data=await musicJson("https://music.youtube.com/youtubei/v1/"+endpoint+"?prettyPrint=false","YouTube Music",endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context,...body})},YOUTUBE_TIMEOUT_MS) as Raw;
- if(data.error)throw new MusicError("YouTube Music returned an API error.");
- return data;
 }
 export async function music(kind:string,value:string){
  if(!value.trim()||value.length>100)throw new MusicError("가수 이름은 1~100자로 입력해 주세요.",400);

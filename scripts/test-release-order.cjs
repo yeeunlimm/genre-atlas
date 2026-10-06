@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const m={exports:{}};
+new Function('exports','require','module',ts.transpileModule(fs.readFileSync('lib/release-order.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(m.exports,require,m);
+const {orderReleases,albumFans}=m.exports;
+const cards=[{id:'a',title:'New unknown',date:'2026',fans:null},{id:'b',title:'Popular',date:'2020',fans:100},{id:'c',title:'Zero',date:'2025',fans:0},{id:'d',title:'New popular',date:'2024',fans:100}];
+assert.deepEqual(orderReleases(cards,'popular').map(x=>x.id),['d','b','c','a']);
+assert.deepEqual(orderReleases(cards,'latest').map(x=>x.id),['a','c','d','b']);
+assert.deepEqual(cards.map(x=>x.id),['a','b','c','d'],'sorting must not mutate loaded state');
+for(const fans of [undefined,null,-1,NaN,Infinity,'10'])assert.equal(albumFans({fans}),null);
+assert.equal(albumFans({fans:0}),0);
+const ui=fs.readFileSync('components/artist-albums.tsx','utf8');
+assert.ok(ui.includes('provider:"deezer"'));assert.ok(!ui.includes('<select'));assert.ok(!ui.includes('setProvider'));
+assert.ok(ui.includes('useState<ReleaseOrder>("popular")'));
+console.log('PASS: Popular / Latest, stable ties, zero vs missing fans, immutable sorting, fixed Deezer source and removed catalog picker.');

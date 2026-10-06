@@ -39,7 +39,8 @@ async function json(url:string,mb=false):Promise<Raw>{
   await new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const onAbort=()=>{clearTimeout(timer);reject(signal.reason);};const timer=setTimeout(()=>{signal.removeEventListener("abort",onAbort);resolve();},delay);signal.addEventListener("abort",onAbort,{once:true});});
   return run();
 }
-const mb=(path:string)=>cached("mb:"+path,3600_000,()=>json("https://musicbrainz.org/ws/2/"+path+(path.includes("?")?"&":"?")+"fmt=json",true));
+export const musicBrainzRequest=(path:string)=>cached("mb:"+path,3600_000,()=>json("https://musicbrainz.org/ws/2/"+path+(path.includes("?")?"&":"?")+"fmt=json",true));
+const mb=musicBrainzRequest;
 export async function musicBrainzDeezerArtist(artistId:string):Promise<string|null>{
   const id=artistId.replace(/^mb:/,"");if(!uuid.test(id))return null;
   const doc=await mb("artist/"+id+"?inc=url-rels");
