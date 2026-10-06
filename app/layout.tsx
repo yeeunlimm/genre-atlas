@@ -3,6 +3,7 @@ import "./globals.css";
 import "./youtube.css";
 import "./studio.css";
 import "./album-wall.css";
+import "./music-ornaments.css";
 import "./cassette-collage.css";
 import "./discovery-station.css";
 import "./releases.css";

@@ -1,9 +1,8 @@
 .cassette-collage{position:relative;isolation:isolate;width:100%;margin:8px 0 24px}
 .cassette-shell{position:relative;width:100%;aspect-ratio:1564/1006;container-type:inline-size}
 .cassette-base{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(.2) contrast(1.04)}
-/* Fill the lower pink label without covering the clear case or upper reels. */
-.cassette-album-label{position:absolute;left:4.5%;top:60.5%;width:90.5%;height:34%;display:block;overflow:hidden;border-radius:1%}
+/* Fill only the marked left-hand portion of the pink strip; keep the name beside it. */
+.cassette-album-label{position:absolute;left:4.5%;top:60.5%;width:28.5%;height:34%;display:block;overflow:hidden;border-radius:1%}
 .cassette-album-label img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.76;filter:grayscale(.65) sepia(.25) saturate(.6) contrast(.95)}
-.cassette-album-label::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 18%,#20171c70 64%,#20171c90);pointer-events:none}
 .cassette-label{position:absolute;left:34%;top:70%;width:57%;color:#f2eeeb;font:italic 500 clamp(12px,6cqw,18px)/1.12 Georgia,"Times New Roman",serif;letter-spacing:.1px;overflow-wrap:anywhere;text-shadow:0 1px 3px #171015,0 0 6px #171015}
 @media(max-width:640px){.cassette-collage{width:min(100%,300px);margin:14px auto 24px}}
