@@ -2,6 +2,8 @@
 import {stationCatalog, type StationTrack, type Credit, type CreditRole} from "./station-catalog";
 import {connection, recommend, searchTracks, type Recommendation} from "./discovery-station";
 import {fetchAppleCredits} from "./apple-credits";
+import {musicPending,musicSignal,musicJson,musicAborted} from "./music-request";
+import {deezerSearch,deezerTrack} from "./deezer-catalog";
 
 type Raw = Record<string, any>;
 export class StationError extends Error { constructor(message: string, public status=502) {super(message);} }
@@ -16,27 +18,26 @@ const weight:Record<CreditRole,number>={producer:5,mixing:4,arranger:3,mastering
 const checkedAt=()=>new Date().toISOString().slice(0,10);
 const source=(entity:string,id:string)=>({label:"MusicBrainz · "+entity+" credits",url:"https://musicbrainz.org/"+entity+"/"+id});
 const memory=new Map<string,{until:number,value:any}>();
-const pending=new Map<string,Promise<any>>();
-let mbTail:Promise<unknown>=Promise.resolve(),mbLast=0,mbWaiting=0;
+// Only completed values and a numeric pacing timestamp are shared across Workers requests.
+let mbNext=0;
+const tracksById=new Map<string,StationTrack>();
+export function rememberTracks(tracks:StationTrack[]){for(const t of tracks){if(tracksById.size>=500)tracksById.delete(tracksById.keys().next().value!);tracksById.set(t.id,t);}return tracks;}
 
 async function cached<T>(key:string,ttl:number,fn:()=>Promise<T>):Promise<T>{
   const hit=memory.get(key);if(hit&&hit.until>Date.now())return hit.value;
-  if(pending.has(key))return pending.get(key)!;
-  const job=fn().then(value=>{if(!(value as {partial?:boolean})?.partial){if(memory.size>=250)memory.delete(memory.keys().next().value!);memory.set(key,{until:Date.now()+ttl,value});}return value;}).finally(()=>pending.delete(key));
-  pending.set(key,job);return job;
+  const pending=musicPending();if(pending?.has(key))return pending.get(key)!;
+  const job=fn().then(value=>{if(!(value as {partial?:boolean})?.partial){if(memory.size>=250)memory.delete(memory.keys().next().value!);memory.set(key,{until:Date.now()+ttl,value});}return value;}).finally(()=>pending?.delete(key));
+  pending?.set(key,job);return job;
 }
 async function json(url:string,mb=false):Promise<Raw>{
-  const run=async()=>{
-    const r=await fetch(url,{headers:mb?{"User-Agent":"GenreAtlas/1.0 (https://genre-atlas-0918.sooyeon-jun-0389.chatgpt.site)",Accept:"application/json"}:{Accept:"application/json"},signal:AbortSignal.timeout(12000)});
-    if(r.status===429||r.status===503)throw new StationError("The music data service is busy. Please retry in a moment.",503);
-    if(!r.ok)throw new StationError("The music data service could not complete this request. Please retry.");
-    return await r.json() as Raw;
-  };
+  const run=()=>musicJson(url,mb?"MusicBrainz":"Apple",new URL(url).pathname.split("/").filter(Boolean).slice(0,3).filter(x=>!uuid.test(x)).join("/"),{headers:mb?{"User-Agent":"GenreAtlas/1.0 (https://genre-atlas-0918.sooyeon-jun-0389.chatgpt.site)",Accept:"application/json"}:{Accept:"application/json"}});
   if(!mb)return run();
-  if(mbWaiting>=16)throw new StationError("Credit lookup is busy. Please retry shortly.",503);
-  mbWaiting++;
-  const job=mbTail.catch(()=>{}).then(async()=>{await new Promise(r=>setTimeout(r,Math.max(0,mbLast+1100-Date.now())));mbLast=Date.now();return run();});
-  mbTail=job;return job.finally(()=>{mbWaiting--;});
+  const delay=Math.max(0,mbNext-Date.now());
+  if(delay>6000)throw new StationError("MusicBrainz is busy. Other catalogs remain available.",503);
+  mbNext=Date.now()+delay+1100;
+  const signal=musicSignal(7000);
+  await new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const onAbort=()=>{clearTimeout(timer);reject(signal.reason);};const timer=setTimeout(()=>{signal.removeEventListener("abort",onAbort);resolve();},delay);signal.addEventListener("abort",onAbort,{once:true});});
+  return run();
 }
 const mb=(path:string)=>cached("mb:"+path,3600_000,()=>json("https://musicbrainz.org/ws/2/"+path+(path.includes("?")?"&":"?")+"fmt=json",true));
 export const apple=(path:string)=>cached("apple:"+path,900_000,()=>json("https://itunes.apple.com/"+path));
@@ -96,25 +97,31 @@ export async function musicBrainzCatalog(artist:string,title?:string):Promise<St
 export async function liveSearch(q:string,limit=40,catalog="apple"){
   if(q.trim().length<2||q.length>120)throw new StationError("Enter 2–120 characters to search for a song or artist.",400);
   const local=searchTracks(q,stationCatalog);
-  if(catalog==="musicbrainz")return {tracks:await searchMusicBrainz(q),provider:"MusicBrainz",canExpand:false,warning:"Alternate recordings and editions from MusicBrainz. Choose the version you want to explore."};
+  if(catalog==="deezer"){const result=await deezerSearch(q,limit);rememberTracks(result.tracks);return result;}
+  if(catalog==="musicbrainz")return {tracks:rememberTracks(await searchMusicBrainz(q)),provider:"MusicBrainz",canExpand:false,warning:"Alternate recordings and editions from MusicBrainz. Choose the version you want to explore."};
   try{
     const data=await apple("search?"+new URLSearchParams({term:q,media:"music",entity:"song",limit:String(limit),country:"US",lang:"en_us"}));
-    const tracks=unique([...local,...(data.results||[]).map(parseApple).filter(Boolean)]);
+    const live=(data.results||[]).map(parseApple).filter(Boolean) as StationTrack[];
+    const tracks=unique([...live,...local.filter(t=>!live.some(x=>sameSong(t,x)&&sameAlbum(t,x)))]);
+    rememberTracks(tracks);
     // Artist+song queries should not put tribute covers ahead of the named artist.
     const terms=q.split(/\s+/).map(normalize).filter(Boolean);
     const relevance=(t:StationTrack)=>terms.filter(term=>normalize(t.artist+" "+t.title).includes(term)).length*10+(normalize(primaryArtist(t.artist)).length>2&&normalize(q).includes(normalize(primaryArtist(t.artist)))?5:0);
     tracks.sort((a,b)=>relevance(b)-relevance(a)||Number(a.explicitness==="cleaned")-Number(b.explicitness==="cleaned"));
     return {tracks,provider:"Apple catalog",canExpand:data.resultCount>=limit&&limit<200,warning:""};
-  }catch{
+  }catch(e){
+    if(catalog==="apple-only")throw e;
     // A second public catalog keeps search usable when Apple's service is unavailable.
     try{
-      return {tracks:unique([...local,...await searchMusicBrainz(q)]),provider:"MusicBrainz",canExpand:false,warning:"Apple search is unavailable. Showing MusicBrainz results; release coverage may differ."};
+      return {tracks:rememberTracks(unique([...local,...await searchMusicBrainz(q)])),provider:"MusicBrainz",canExpand:false,warning:"Apple search is unavailable. Showing MusicBrainz results; release coverage may differ."};
     }catch{throw new StationError("Live catalog search is temporarily unavailable. Please retry. Starting picks remain available.",503);}
   }
 }
 const record=(id:string)=>mb("recording/"+id+"?inc=artist-rels+artist-credits+releases+release-groups");
 export async function loadTrack(id:string):Promise<StationTrack>{
+  const saved=tracksById.get(id);if(saved)return saved;
   const local=stationCatalog.find(t=>t.id===id);if(local)return local;
+  if(/^deezer:\d{1,16}$/.test(id))return rememberTracks([await deezerTrack(id)])[0];
   if(/^itunes:\d{1,16}$/.test(id)){
     const data=await apple("lookup?id="+id.slice(7)+"&entity=song&country=US");
     const track=(data.results||[]).map(parseApple).find((t:StationTrack|null)=>t?.id===id);if(track)return track;
@@ -175,6 +182,7 @@ async function graph(id:string):Promise<Graph>{
     let followed=0;const visited=new Set<string>();
     // Missing/ambiguous first names must not prevent following the remaining people.
     for(const person of people.slice(0,8)){
+      if(musicAborted()){partial=true;break;}
       if(followed>=3)break;
       const seedRoles=credits.filter(c=>c.person===person);
       if(!seedRoles.length)continue;
@@ -217,6 +225,7 @@ export async function liveStation(id:string,offset=0):Promise<LiveStationResult>
     const batch=g.targets.slice(offset,offset+8);
     let partial=g.partial;
     for(const target of batch){
+      if(musicAborted()){partial=true;break;}
       try{
         if(target.kind==="recording"){
           const r=await record(target.id),t=parseRecording(r);if(t)candidates.push({...t,credits:[...t.credits,target.credit]});

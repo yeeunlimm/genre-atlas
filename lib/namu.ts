@@ -55,6 +55,20 @@ export function parseDocument(html:string,requested:string,kind:string){
    });
   });
  }
+ if(kind!=="artist"&&!englishName){
+  // Read only the genre's own bilingual heading, never other English text on the page.
+  $("table").each((_,table)=>{
+   $(table).find("tr").slice(0,3).each((_,row)=>{
+    if(englishName)return;
+    const cells=$(row).children("td,th");if(cells.length!==1)return;
+    const heading=cells.first().clone();heading.find("sup,table,.wiki-fn-link,.wiki-fn-content").remove();heading.find("br").replaceWith("\n");
+    const value=heading.text().trim();if(value.length>200)return;
+    const alias=value.startsWith(shortTitle)?value.slice(shortTitle.length).replace(/^[\s|·:]+/,"").trim():"";
+    if(latinName(alias))englishName=alias;
+   });
+  });
+ }
+ if(kind==="genre-label")return {name:title,title,englishName};
  if(kind==="artist")return {name:englishName||title,title,englishName,genres,stars,checkedAt,isMusician:musician};
  const out:(Link&{evidence:"list"|"tag"})[]=[];
  const add=(items:Link[],evidence:"list"|"tag")=>{for(const x of items){
@@ -101,7 +115,7 @@ export function parseDocument(html:string,requested:string,kind:string){
  }
  const rootTitle=title.split(/[(/]/)[0];
  const artistPages=links($,$("body")).filter(x=>x.title.startsWith(rootTitle+"/")&&/(래퍼|뮤지션|음악가|가수|밴드)/.test(x.title.slice(rootTitle.length+1))).slice(0,2);
- return {name:title,title,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
+ return {name:title,title,englishName,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
 }
 async function fetchDocument(title:string,search=false){
  let current=search?"https://namu.wiki/Search?q="+encodeURIComponent(title):"https://namu.wiki/w/"+encodeURIComponent(title);

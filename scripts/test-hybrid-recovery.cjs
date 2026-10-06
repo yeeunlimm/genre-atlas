@@ -29,7 +29,7 @@ async function main(){
     const recording={id:recordingId,title:'Fallback Song','artist-credit':[{artist:{id:artistId,name:'Fallback Peer'}}],releases:[{id:'cccccccc-cccc-cccc-cccc-cccccccccccc',title:'Fallback Album',status:'Official'}]};
     return Response.json({recordings:[recording,{...recording,id:'wrong',title:'Cover','artist-credit':[{artist:{id:'other',name:'Cover Band'}}]}]});
   };
-  const result=await sources.relatedCandidates(seed);
+  const result=await sources.youtubeRelated(seed);
   assert.equal(result.state,'ready');assert.equal(result.rows.length,1,'Apple failure still yields MB recommendation');
   assert.equal(result.rows[0].track.title,'Fallback Song');
   assert.equal(result.rows[0].track.catalogKind,'musicbrainz');

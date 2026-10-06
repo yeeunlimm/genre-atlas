@@ -2,7 +2,7 @@ import {getChatGPTUser,chatGPTSignInPath,chatGPTSignOutPath} from "@/app/chatgpt
 import {stationCatalog} from "@/lib/station-catalog";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store",Vary:"Cookie"};
-const validId=(id:unknown):id is string=>typeof id==="string"&&(stationCatalog.some(t=>t.id===id)||/^itunes:\d{1,16}$/.test(id)||/^mb:[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id));
+const validId=(id:unknown):id is string=>typeof id==="string"&&(stationCatalog.some(t=>t.id===id)||/^(?:itunes|deezer):\d{1,16}$/.test(id)||/^mb:[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id));
 export async function GET(request:Request){
   const id=new URL(request.url).searchParams.get("track"),returnTo=(validId(id)?"/?stationTrack="+encodeURIComponent(id):"/")+"#discovery-station";
   try{const user=await getChatGPTUser();return Response.json({userId:user?.userId||null,signIn:chatGPTSignInPath(returnTo),signOut:chatGPTSignOutPath(returnTo)},{headers});}

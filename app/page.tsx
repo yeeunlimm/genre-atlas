@@ -11,7 +11,7 @@ type AlbumArtwork={title:string;imageUrl:string};
 type Artist={albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[];wiki?:GenreArtist;id:string;name:string;audience:number|null;audienceLabel:string;url:string;checkedAt:string;subscribers?:number|null};
 import {englishText} from "@/lib/english-display";
 import {youtubeSearchUrl} from "@/lib/listen-link";
-import {genreLabel,type Genre} from "@/lib/genre-view";
+import {genreLabel,knownGenreLabel,type Genre} from "@/lib/genre-view";
 type Result={artist:Artist;related:Artist[];artists:Artist[];error?:string};
 const compact=(n:number|null)=>n===null?"Unavailable":new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(n);
 const normalize=(s:string)=>s.toLocaleLowerCase().replace(/[\s._'’()-]/g,"");
@@ -33,6 +33,16 @@ export default function Home(){
  const [mode,setMode]=useState<"related"|"genre">("related"),[selectedGenre,setSelectedGenre]=useState<Genre|null>(null);
  const [genrePage,setGenrePage]=useState<GenrePage|null>(null),[genreArtists,setGenreArtists]=useState<GenreArtist[]>([]),[genreBusy,setGenreBusy]=useState(false),[genreError,setGenreError]=useState("");
  const run=useRef(0),genreRun=useRef(0),genreRequest=useRef<AbortController|null>(null);
+ useEffect(()=>{
+  const unknown=genres.filter(g=>!knownGenreLabel(g));if(!unknown.length)return;
+  const controller=new AbortController(),token=run.current;let index=0;
+  void Promise.all([0,1].map(async()=>{while(index<unknown.length&&!controller.signal.aborted){const g=unknown[index++];try{
+   const response=await fetch("/api/namu?kind=genre-label&title="+encodeURIComponent(g.title),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(8000)])});if(!response.ok)continue;
+   const data=await response.json() as Genre;if(token!==run.current||controller.signal.aborted)return;
+   if(data.englishName)setGenres(previous=>previous.map(item=>item.title===g.title?{...item,englishName:data.englishName}:item));
+  }catch{}}}));
+  return()=>controller.abort();
+ },[genres.map(g=>g.title).join("|"),genreSource]);
  const resetGenre=useCallback(()=>{++genreRun.current;genreRequest.current?.abort();setMode("related");setSelectedGenre(null);setGenrePage(null);setGenreArtists([]);setGenreBusy(false);setGenreError("");},[]);
  useEffect(()=>()=>{genreRequest.current?.abort();},[]);
  const selectArtist=useCallback(async(a:Artist)=>{

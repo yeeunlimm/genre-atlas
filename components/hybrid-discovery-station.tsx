@@ -9,6 +9,7 @@ import type {SourceResult} from "@/lib/hybrid-sources";
 import {StationArtwork} from "./station-artwork";
 import {addLiked,emptyProfile,profileKey,readProfile,stationSeeds} from "@/lib/station-profile";
 import {attemptKey,emptyStationMessage,jobKey,recoveryJobs,type Job,type Progress} from "@/lib/station-recovery";
+import {mergeSearch} from "@/lib/catalog-search";
 
 const picks=[{title:"SKELETONS",artist:"Travis Scott"},{title:"Lifestyle",artist:"Rich Gang"},{title:"Victory Lap",artist:"Fred again.."},{title:"Boy's a liar",artist:"PinkPantheress"},{title:"Summer Gypsy",artist:"Nujabes"}];
 const asCredits=(seed:StationTrack,rows:ReturnType<typeof recommend>):Candidate[]=>rows.filter(r=>r.reasons.some(x=>x.kind==="credit"||x.kind==="sample")).map(r=>({...r,paths:[{route:"credits",seedId:seed.id,confidence:Math.min(.95,.6+r.score*.035)}]}));
@@ -58,12 +59,25 @@ export function DiscoveryStation(){
     try{let index=0;await Promise.all([0,1].map(async()=>{while(index<jobs.length&&!controller.signal.aborted)await runJob(jobs[index++],controller.signal);}));}
     finally{if(stationRequest.current===controller){recoveryLock.current=false;setRecoveryBusy(false);setNotice("");}}
   }
-  async function api<T>(url:string,signal:AbortSignal):Promise<T>{const response=await fetch(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(90000)])});let data:T & {error?:string};try{data=await response.json();}catch{throw new Error("The music service returned an unexpected response. Please retry this source.");}if(!response.ok)throw new Error(data.error||"Music lookup failed. Please retry.");return data;}
-  async function search(q=query,count=40,catalog="apple"){
+  async function api<T>(url:string,signal:AbortSignal,timeout=35000):Promise<T>{const response=await fetch(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(timeout)])});let data:T & {error?:string};try{data=await response.json();}catch{throw new Error("The music service returned an unexpected response. Please retry this source.");}if(!response.ok)throw new Error(data.error||"Music lookup failed. Please retry.");return data;}
+  async function search(q=query,count=40,catalog="auto"){
     if(q.trim().length<2){setSearchError("Enter at least two characters.");return;}
     searchRequest.current?.abort();const c=new AbortController();searchRequest.current=c;setSearching(true);setSearchError("");setSearched(q);setMatches([]);setCanExpand(false);setLimit(count);
-    try{const d=await api<{tracks:StationTrack[];canExpand:boolean;warning:string;provider:string}>("/api/station?"+new URLSearchParams({q:q.trim(),limit:String(count),catalog}),c.signal);if(c.signal.aborted)return;setMatches(d.tracks);setCanExpand(d.canExpand);setSearchNote(d.warning||"Results from "+d.provider+" · select one song to start.");}
-    catch(e){if(!c.signal.aborted)setSearchError(e instanceof Error?e.message:"Search failed.");}finally{if(!c.signal.aborted)setSearching(false);}
+    setSearchNote("Checking music catalogs…");
+    let combined:StationTrack[]=[],completed=0;const providers:string[]=[],failed:string[]=[];
+    const fetchCatalog=async(name:string)=>{
+      try{const d=await api<{tracks:StationTrack[];canExpand:boolean;warning:string;provider:string}>("/api/station?"+new URLSearchParams({q:q.trim(),limit:String(count),catalog:name}),c.signal,12000);
+        if(c.signal.aborted)return;completed++;providers.push(d.provider);combined=mergeSearch([...combined,...d.tracks],q);setMatches(combined);setCanExpand(previous=>previous||d.canExpand);
+        setSearchNote("Results from "+providers.join(" + ")+" · select a song while other sources finish.");
+      }catch{if(!c.signal.aborted)failed.push(name==="apple-only"?"Apple":name==="deezer"?"Deezer":"MusicBrainz");}
+    };
+    try{
+      await Promise.all((catalog==="auto"?["deezer","apple-only"]:[catalog]).map(fetchCatalog));
+      if(!c.signal.aborted&&!combined.length&&catalog==="auto"){setSearchNote("Checking MusicBrainz for additional recordings…");await fetchCatalog("musicbrainz");}
+      if(c.signal.aborted)return;
+      setSearchNote((providers.length?"Results from "+providers.join(" + ")+".":"")+(failed.length?" Unavailable: "+failed.join(", ")+". You can retry or check other catalog versions.":" Select one song to start."));
+      if(!completed)setSearchError("Music catalogs could not be reached. This does not mean your song is missing.");
+    }finally{if(!c.signal.aborted)setSearching(false);}
   }
   async function runJob(job:Job,signal:AbortSignal){
     if(signal.aborted)return;
@@ -128,14 +142,15 @@ export function DiscoveryStation(){
       <p className="station-meta">Select one song. Recommendations start right away.</p>
       <div className="station-seeds">{picks.map(pick=><button key={pick.title} data-pick={pick.title} aria-label={pick.title+" by "+pick.artist} onClick={()=>{const q=pick.title+" "+pick.artist;setQuery(q);void search(q);}}>{pick.title}</button>)}</div>
       <div className="station-account">{!hydrated?<p className="station-meta">Checking sign-in…</p>:userId?<><span>Signed in · {liked.length} liked {liked.length===1?"song":"songs"}</span><a href={signOut} target="_top">Sign out</a></>:<><span>Discover freely. Sign in only to like.</span><a href={signIn} target="_top">Sign in with ChatGPT</a></>}{authError&&<div role="alert"><p>{authError}</p><button onClick={()=>void loadIdentity()}>Retry sign-in check</button></div>}</div>
-      <p role="status" className="station-meta">{searching?"Searching the live catalog…":searchNote}</p>
+      <p role="status" className="station-meta">{searchNote}</p>
       {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
-      <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>{matches.map(t=><button key={t.id} disabled={!hydrated||liking} aria-pressed={origin?.id===t.id} onClick={()=>void start(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":""}</span></button>)}{searched&&!searching&&!searchError&&!matches.length&&<p>No songs found. Try the artist and song title.</p>}</div>
+      <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>{matches.map(t=><button key={t.id} disabled={!hydrated||liking} aria-pressed={origin?.id===t.id} onClick={()=>void start(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":""}</span><small>{t.catalogKind==="deezer"?"Deezer":t.catalogKind==="apple"?"Apple":t.catalogKind==="musicbrainz"?"MusicBrainz":"Source-checked starter record"}</small></button>)}{searched&&!searching&&!searchError&&!matches.length&&<p>No matching recording in the catalogs checked. Try another spelling or other catalog versions; catalog coverage is not complete.</p>}</div>
       {canExpand&&!searching&&<button onClick={()=>void search(searched,limit===40?100:200)}>More search results</button>}
       {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Other catalog versions</button>}
     </div><div className="station-output">
       <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Like a song to shape what comes next.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
-      {finding&&<p className="station-meta" role="status">Checking additional catalogs and connections automatically. Credits can take a minute; other recommendations can arrive sooner.</p>}
+      {finding&&<p className="station-meta" role="status">Checking live catalogs and credits independently. Available recommendations appear as soon as they arrive.</p>}
+      {shown&&stationCatalog.some(t=>t.id===shown.track.id)&&<p className="station-meta">Source-checked starter collection · this connection was stored in advance, not found by a live lookup.</p>}
       {origin&&<div className="station-origin"><div className="station-origin-copy"><span>STARTING FROM</span><b>{origin.title} / {origin.artist}</b><small>Excluded album: {origin.album}</small><div className="station-feedback">{likeControl(origin)}</div>{seeds.length>1&&<small>Also shaped by {seeds.length-1} of your recent likes. Their albums are excluded too.</small>}</div><StationArtwork key={origin.id} track={origin} size="seed"/></div>}
       {shown?<><article className="station-current" key={shown.track.id}><div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{shown.track.title}</h3><p className="station-artist">{shown.track.artist}</p><p className="station-meta">{shown.track.album}</p><div className="station-tags">{[...new Set(shown.paths.map(p=>routeLabels[p.route]))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={shown.track.id+shown.track.album} track={shown.track} size="recommendation"/></div>
         <div className="station-actions"><a className="primary" href={trackYouTubeUrl(shown.track)} target="_blank" rel="noreferrer"><Play size={17}/>Listen on YouTube</a><button disabled={liking} onClick={()=>advance()}><SkipForward size={17}/>Next track</button></div>
@@ -145,6 +160,6 @@ export function DiscoveryStation(){
       {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & your weights</summary><p className="station-meta">1.00× is neutral. Weights change after a like or dislike; skips do not change them.</p><div className="station-weights">{routes.map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
     </div></div>
     <footer className="station-foot"><span>{storageNote||"Preferences stay in this browser. Likes are separated by sign-in; they do not sync between devices."}</span><button disabled={!hydrated||liking} onClick={reset}><RotateCcw size={15}/>Reset saved preferences</button></footer>
-    <details className="station-method"><summary>How this station works</summary><p>Select one song to start immediately. Sign in with ChatGPT to like it or a recommendation. A like automatically adds that song to your local taste profile and refreshes discovery; no playlist-building step is needed. Your starting song and up to four recent likes open independent credit, related-artist and optional Last.fm similar-track paths. Likes on recommendations also adjust their discovery-route weights. The current song’s album and known albums of the active liked songs are excluded. One track per primary artist per station and a three-day song cooldown apply. Search uses Apple’s public US catalog, with MusicBrainz as a fallback; credits come from Apple and MusicBrainz. Artist-level suggestions come from YouTube Music. Last.fm track similarity remains off without a server API key. Shared credits are not required. No BPM or audio analysis is used. Up to 20 liked songs, 500 votes and 1,000 recent recommendations are saved locally, separately for each signed-in user. Older anonymous likes are not automatically assigned to an account. Clearing browser data loses these preferences. Sign-in is checked on the server before each like; it does not enable cross-device storage.</p></details>
+    <details className="station-method"><summary>How this station works</summary><p>Select one song to start. Likes require sign-in and shape discovery from this song and up to four recent likes. Search checks Deezer and Apple in parallel; MusicBrainz provides additional recordings. Related artists and their songs come from Deezer, with YouTube Music and other catalogs as fallbacks. Credits come from MusicBrainz and available Apple song pages. The source-checked starter collection is stored in advance and labelled separately. Last.fm is off without an API key. No Spotify, BPM scoring or audio analysis is used. Shared credits are not required. The same album, disliked songs, repeated artists and songs shown in the last three days are excluded. No provider guarantees every recording. Preferences stay in this browser, separately for each signed-in user; sign-in does not enable cross-device storage.</p></details>
   </section>;
 }

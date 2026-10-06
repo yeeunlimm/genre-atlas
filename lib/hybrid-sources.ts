@@ -1,4 +1,6 @@
-import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError} from "./live-station";
+import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError,rememberTracks} from "./live-station";
+import {deezer,deezerArtist,parseDeezer} from "./deezer-catalog";
+import {logMusicError,musicAborted} from "./music-request";
 import {music, type MusicArtist} from "./youtube-music";
 import {excluded, type Candidate, type Route} from "./hybrid-station";
 import type {StationTrack} from "./station-catalog";
@@ -19,7 +21,26 @@ export async function catalog(artist:string,title?:string):Promise<{tracks:Stati
   try{return {tracks:await musicBrainzCatalog(artist,title),fallback:true};}
   catch{throw new StationError(appleFailed?"Apple and MusicBrainz catalogs could not load. Retry shortly.":"No exact Apple match; the alternate catalog could not load. Retry shortly.");}
 }
+export async function deezerRelated(seed:StationTrack,offset=0):Promise<SourceResult>{
+  const id=await deezerArtist(seed);
+  if(!id)return {rows:[],state:"empty",note:"No exact Deezer song-and-artist match.",nextOffset:null};
+  const related=await deezer(`artist/${id}/related?limit=6&index=${offset}`);
+  const peers=(related.data||[]).filter((a:any)=>Number.isSafeInteger(a.id)&&typeof a.name==="string");
+  const fetched=await mapLimited(peers,async(peer:any,index)=>{
+    if(musicAborted())throw new Error("Request deadline reached.");
+    const data=await deezer(`artist/${peer.id}/top?limit=10`);
+    const tracks=rememberTracks((data.data||[]).map(parseDeezer).filter((t:StationTrack|null):t is StationTrack=>!!t&&t.artistId===`deezer:${peer.id}`));
+    return tracks.filter(t=>!excluded(t,[seed])).slice(0,4).map((track,i):Candidate=>({track,score:0,feedbackBoost:false,paths:[{route:"related-artists",seedId:seed.id,confidence:Math.max(.45,.82-(offset+index)*.008-i*.025)}],reasons:[{kind:"related-artist",label:"Related artist · Deezer",detail:`${peer.name} appears in Deezer’s related artists for ${seed.primaryArtistName||seed.artist}. This is artist-level discovery, not a measured sound match.`,sources:[{label:"Deezer · artist",url:`https://www.deezer.com/artist/${id}`},track.source]}]}));
+  });
+  const rows=fetched.flatMap(r=>r.status==="fulfilled"?r.value:[]),partial=fetched.some(r=>r.status==="rejected");
+  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:"Live Deezer artist connections and track catalog."+(partial?" Some artist catalogs could not load.":""),nextOffset:related.next&&offset+6<30?offset+6:null};
+}
 export async function relatedCandidates(seed:StationTrack,offset=0):Promise<SourceResult>{
+  let failure:unknown;
+  try{const result=await deezerRelated(seed,offset);if(result.rows.length||result.nextOffset!==null)return result;}catch(e){failure=e;logMusicError("Deezer","related-artists",e);}
+  try{return await youtubeRelated(seed,offset);}catch(e){logMusicError("YouTube Music","related-artists",e);throw failure||e;}
+}
+export async function youtubeRelated(seed:StationTrack,offset=0):Promise<SourceResult>{
   const name=seed.primaryArtistName||seed.artist;
   const found=await music("search",name) as {artists:MusicArtist[]};
   const matches=found.artists.filter(a=>normalize(a.name)===normalize(name));
