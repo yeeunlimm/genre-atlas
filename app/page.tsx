@@ -40,9 +40,9 @@ export default function Home(){
   const unknown=genres.filter(g=>!knownGenreLabel(g));if(!unknown.length)return;
   const controller=new AbortController(),token=run.current;let index=0;
   void Promise.all([0,1].map(async()=>{while(index<unknown.length&&!controller.signal.aborted){const g=unknown[index++];try{
-   const response=await fetch("/api/namu?kind=genre-label&title="+encodeURIComponent(g.title),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(8000)])});if(!response.ok)continue;
+   const response=await fetch("/api/namu?kind=genre-label&title="+encodeURIComponent(g.title),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});if(!response.ok)continue;
    const data=await response.json() as Genre;if(token!==run.current||controller.signal.aborted)return;
-   if(data.englishName)setGenres(previous=>previous.map(item=>item.title===g.title?{...item,englishName:data.englishName}:item));
+   if(data.englishName){setGenres(previous=>previous.map(item=>item.title===g.title?{...item,englishName:data.englishName}:item));setSelectedGenre(previous=>previous?.title===g.title?{...previous,englishName:data.englishName}:previous);}
   }catch{}}}));
   return()=>controller.abort();
  },[genres.map(g=>g.title).join("|"),genreSource]);
