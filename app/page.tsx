@@ -11,7 +11,7 @@ import type {MusicArtist,AlbumArtwork} from "@/lib/youtube-music";
 type Artist=MusicArtist&{wiki?:GenreArtist};
 import {englishText} from "@/lib/english-display";
 import {youtubeSearchUrl} from "@/lib/listen-link";
-import {genreLabel,knownGenreLabel,type Genre} from "@/lib/genre-view";
+import {genreLabel,knownGenreLabel,genreDisplayState,type Genre} from "@/lib/genre-view";
 import {ARTIST_CLIENT_TIMEOUT_MS} from "@/lib/music-timeouts";
 type Result={artist?:Artist;related:Artist[];artists:Artist[];provider:"YouTube Music"|"Deezer";state:"ready"|"empty"|"choose-artist";notice:string;error?:string};
 const compact=(n:number|null)=>n===null?"Unavailable":new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(n);
@@ -31,6 +31,8 @@ function LoadingArtwork({album,artistName}:{album?:AlbumArtwork;artistName?:stri
 export default function Home(){
  const [query,setQuery]=useState(""),[artist,setArtist]=useState<Artist|null>(null),[candidates,setCandidates]=useState<Artist[]>([]),[related,setRelated]=useState<Artist[]>([]);
  const [genres,setGenres]=useState<Genre[]>([]),[genreSource,setGenreSource]=useState(""),[genreStatus,setGenreStatus]=useState("Search an artist to explore genres.");
+ const [genreRetry,setGenreRetry]=useState(0);
+ const genreDisplay=genreDisplayState(genres);
  const [busy,setBusy]=useState(""),[error,setError]=useState(""),[note,setNote]=useState(""),[detail,setDetail]=useState<Artist|null>(null);
  const [relatedProvider,setRelatedProvider]=useState("YouTube Music"),[fallbackChoices,setFallbackChoices]=useState<Artist[]>([]);
  const [mode,setMode]=useState<"related"|"genre">("related"),[selectedGenre,setSelectedGenre]=useState<Genre|null>(null);
@@ -39,13 +41,16 @@ export default function Home(){
  useEffect(()=>{
   const unknown=genres.filter(g=>!knownGenreLabel(g));if(!unknown.length)return;
   const controller=new AbortController(),token=run.current;let index=0;
+  setGenres(previous=>previous.map(g=>!knownGenreLabel(g)?{...g,resolutionStatus:"pending"}:g));
   void Promise.all([0,1].map(async()=>{while(index<unknown.length&&!controller.signal.aborted){const g=unknown[index++];try{
-   const response=await fetch("/api/namu?kind=genre-label&title="+encodeURIComponent(g.title),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});if(!response.ok)continue;
-   const data=await response.json() as Genre;if(token!==run.current||controller.signal.aborted)return;
-   if(data.englishName){setGenres(previous=>previous.map(item=>item.title===g.title?{...item,englishName:data.englishName}:item));setSelectedGenre(previous=>previous?.title===g.title?{...previous,englishName:data.englishName}:previous);}
-  }catch{}}}));
+   const response=await fetch("/api/namu?kind=genre-label&title="+encodeURIComponent(g.title),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(33000)])});if(!response.ok)throw new Error("Genre label lookup unavailable");
+   const data=await response.json() as Genre&{status:Genre["resolutionStatus"];sourceUrl:string|null};if(token!==run.current||controller.signal.aborted)return;
+   const englishName=knownGenreLabel({name:"",title:"",englishName:data.englishName});
+   setGenres(previous=>previous.map(item=>item.title===g.title?{...item,englishName,resolutionStatus:englishName?"verified":data.status==="unresolved"?"unresolved":"unavailable",labelSourceUrl:data.sourceUrl}:item));
+   if(englishName)setSelectedGenre(previous=>previous?.title===g.title?{...previous,englishName}:previous);
+  }catch{if(token===run.current&&!controller.signal.aborted)setGenres(previous=>previous.map(item=>item.title===g.title?{...item,resolutionStatus:"unavailable"}:item));}}}));
   return()=>controller.abort();
- },[genres.map(g=>g.title).join("|"),genreSource]);
+ },[genres.map(g=>g.title).join("|"),genreSource,genreRetry]);
  const resetGenre=useCallback(()=>{++genreRun.current;genreRequest.current?.abort();setMode("related");setSelectedGenre(null);setGenrePage(null);setGenreArtists([]);setGenreBusy(false);setGenreError("");},[]);
  useEffect(()=>()=>{genreRequest.current?.abort();},[]);
  const selectArtist=useCallback(async(a:Artist)=>{
@@ -108,7 +113,7 @@ export default function Home(){
  <section className="explorer">
  <aside className="artist-panel"><div className="panel-kicker"><span>01 / STARTING POINT</span></div><CassetteCollage artist={artist}/><h2>{englishText(artist?.name,"SELECT ARTIST")}</h2><p className="muted">{artist?compact(artist.audience)+" "+audienceMetric(artist).toLowerCase():"Your search starts here."}</p>{artist&&<a className="source-link" href={youtubeSearchUrl(artist.name)} target="_blank" rel="noreferrer">Listen on YouTube <ArrowUpRight size={14}/></a>}
  <div className="divider"/><span className="eyebrow genre-label">ARTIST RADIO</span><div className="genres"><button className={!genreMode?"genre active":"genre"} aria-pressed={!genreMode} onClick={()=>setMode("related")}>All related <span>{busy?"…":error||fallbackChoices.length?"—":related.length}</span></button></div><p className="nav-description">{relatedProvider} recommendations</p>
- <div className="divider"/><span className="eyebrow genre-label">EXPLORE BY GENRE</span><p className="nav-description">A separate artist collection from NamuWiki</p><div className="genres">{genres.map(g=><button key={g.title} className={genreMode&&selectedGenre?.title===g.title?"genre active":"genre"} aria-pressed={genreMode&&selectedGenre?.title===g.title} onClick={()=>void exploreGenre(g)}>{genreLabel(g)}</button>)}{genreStatus&&<p className="muted small">{genreStatus}</p>}</div>
+ <div className="divider"/><span className="eyebrow genre-label">EXPLORE BY GENRE</span><p className="nav-description">A separate artist collection from NamuWiki</p><div className="genres" aria-busy={genreDisplay.pending>0}>{genreDisplay.visible.map(g=><button key={g.title} className={genreMode&&selectedGenre?.title===g.title?"genre active":"genre"} aria-pressed={genreMode&&selectedGenre?.title===g.title} onClick={()=>void exploreGenre(g)}>{genreLabel(g)}</button>)}{genreStatus&&<p className="muted small">{genreStatus}</p>}{genreDisplay.pending>0&&<p role="status" className="muted small">Checking English genre names…</p>}{genreDisplay.hidden>0&&genreDisplay.pending===0&&<p role="status" className="muted small">{genreDisplay.visible.length?"Genres without a verified English name are hidden.":"No verified English genre names available. Related artists are still available."}</p>}{genreDisplay.hidden>0&&genreDisplay.pending===0&&<button className="secondary" onClick={()=>setGenreRetry(n=>n+1)}>Retry genre names</button>}</div>
  {genreSource&&<a className="source-link genre-source" href={genreSource} target="_blank" rel="noreferrer">Source: NamuWiki <ArrowUpRight size={13}/></a>}
  </aside>
  <section className="results" aria-busy={activeBusy}><div className="results-heading"><div><span className="eyebrow">{genreMode?"02 / GENRE DISCOVERY":"02 / ARTIST RADIO"}</span><h2>{genreMode?(selectedGenre?genreLabel(selectedGenre):"EXPLORE BY GENRE"):"RELATED ARTISTS"}</h2></div><span className="count">{String(visible.length).padStart(2,"0")}<span>ARTISTS</span></span></div>

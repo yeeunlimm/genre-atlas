@@ -1,4 +1,4 @@
-export type Genre = {name: string; title: string; englishName?:string|null};
+export type Genre = {name: string; title: string; englishName?:string|null;resolutionStatus?:"pending"|"verified"|"unresolved"|"unavailable";labelSourceUrl?:string|null};
 const labels: Record<string, string> = {
   "사이키델릭 록":"Psychedelic Rock", "사이키델릭 팝":"Psychedelic Pop",
   "네오 사이키델리아":"Neo-Psychedelia", "인디 록":"Indie Rock", "인디 팝":"Indie Pop",
@@ -47,6 +47,12 @@ export function knownGenreLabel(g:Genre):string|null{
 }
 // Translate display labels only; source titles still drive exact genre matching.
 export function genreLabel(g: Genre) { return knownGenreLabel(g)||g.name; }
+export function genreDisplayState(genres:Genre[]){
+ const visible=genres.filter(g=>!!knownGenreLabel(g));
+ const pending=genres.filter(g=>!knownGenreLabel(g)&&(!g.resolutionStatus||g.resolutionStatus==="pending")).length;
+ const hidden=genres.length-visible.length-pending;
+ return {visible,pending,hidden};
+}
 export function genreOutcome(total: number, matched: number, unknown: number, label: string) {
   if (matched > 0) return {
     fallback: false,
