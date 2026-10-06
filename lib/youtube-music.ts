@@ -1,7 +1,7 @@
 type Raw=Record<string,any>;
 import {musicPending,musicJson} from "./music-request";
 export type AlbumArtwork={title:string;imageUrl:string};
-export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
+export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;metric?:"monthly-audience"|"deezer-fans";provider?:"YouTube Music"|"Deezer";subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
 const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
 const cache=new Map<string,{expires:number;data:unknown}>();
 export class MusicError extends Error{constructor(message:string,public status=502){super(message);}}
