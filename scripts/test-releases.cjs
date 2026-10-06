@@ -3,7 +3,8 @@ let responses=[],calls=[];
 const uuid="11111111-1111-1111-1111-111111111111",edition="22222222-2222-2222-2222-222222222222";
 async function request(path){calls.push(path);if(!responses.length)throw new Error("Unexpected fixture request: "+path);return responses.shift();}
 const code=ts.transpileModule(fs.readFileSync("lib/releases.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const m={exports:{}};new Function("exports","require","module",code)(m.exports,p=>p==="./live-station"?{musicBrainzRequest:request,normalize:s=>s.toLowerCase(),StationError:class extends Error{constructor(s,status){super(s);this.status=status;}}}:{deezer:request},m);
+const identity={exports:{}};new Function("exports","require","module",ts.transpileModule(fs.readFileSync("lib/release-identity.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(identity.exports,require,identity);
+const m={exports:{}};new Function("exports","require","module",code)(m.exports,p=>p==="./release-identity"?identity.exports:p==="./live-station"?{musicBrainzRequest:request,normalize:s=>s.toLowerCase(),StationError:class extends Error{constructor(s,status){super(s);this.status=status;}}}:{deezer:request},m);
 const r=m.exports;
 (async()=>{
  assert.deepEqual(r.releaseTypes({"primary-type":"Album","secondary-types":["Compilation","Mixtape/Street"]}),["Album","Compilation","Mixtape"]);
