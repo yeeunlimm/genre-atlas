@@ -1,4 +1,5 @@
 import {AsyncLocalStorage} from "node:async_hooks";
+import {inspectMusicFailure} from "./music-diagnostics";
 
 // Workers may reuse completed data, but must not share in-flight I/O between requests.
 type Scope={signal:AbortSignal;pending:Map<string,Promise<any>>};
@@ -25,7 +26,12 @@ export function logMusicError(provider:string,stage:string,error:unknown){
 export async function musicJson(url:string,provider:string,stage:string,init:RequestInit={},timeout=6500):Promise<Record<string,any>>{
   try{
     const response=await fetch(url,{...init,signal:musicSignal(timeout)});
-    if(!response.ok)throw new MusicLookupError(provider,stage,"upstream_error",response.status);
+    if(!response.ok){
+      if(provider==="YouTube Music"||provider==="Apple"){
+        try{await inspectMusicFailure(response,provider,stage);}catch{/* Diagnostics must never replace the original failure. */}
+      }
+      throw new MusicLookupError(provider,stage,"upstream_error",response.status);
+    }
     try{return await response.json() as Record<string,any>;}catch(e){if(musicAborted()||(e instanceof Error&&/Abort|Timeout/.test(e.name)))throw e;throw new MusicLookupError(provider,stage,"invalid_response");}
   }catch(e){
     const error=e instanceof MusicLookupError?e:new MusicLookupError(provider,stage,e instanceof Error&&/Abort|Timeout/.test(e.name)?"timeout":"network_error");
