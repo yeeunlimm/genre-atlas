@@ -1,9 +1,10 @@
 type Raw=Record<string,any>;
+import {musicPending,musicJson} from "./music-request";
+import {YOUTUBE_TIMEOUT_MS} from "./music-timeouts";
 export type AlbumArtwork={title:string;imageUrl:string};
-export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
+export type MusicArtist={id:string;name:string;audience:number|null;audienceLabel:string;metric?:"monthly-audience"|"deezer-fans";provider?:"YouTube Music"|"Deezer";subscribers?:number|null;url:string;checkedAt:string;albumArtwork?:AlbumArtwork;albumArtworks?:AlbumArtwork[]};
 const context={client:{clientName:"WEB_REMIX",clientVersion:"1.20260916.03.00",hl:"en",gl:"KR"}};
 const cache=new Map<string,{expires:number;data:unknown}>();
-const jobs=new Map<string,Promise<unknown>>();
 export class MusicError extends Error{constructor(message:string,public status=502){super(message);}}
 export function parseCount(value:string):number|null{
  const m=value.trim().replaceAll(",","").match(/^(\d+(?:\.\d+)?)\s*([KMB만억천]?)(?:\s|$)/i);
@@ -62,19 +63,17 @@ export function parseArtist(data:Raw,id:string){
  return {artist,related:related.slice(0,30)};
 }
 async function request(endpoint:"search"|"browse",body:Raw){
- const r=await fetch("https://music.youtube.com/youtubei/v1/"+endpoint+"?prettyPrint=false",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context,...body}),signal:AbortSignal.timeout(15000)});
- if(r.status===429)throw new MusicError("YouTube Music 요청이 잠시 제한됐습니다. 잠시 후 다시 검색해 주세요.",429);
- if(!r.ok)throw new MusicError("YouTube Music에 연결하지 못했습니다. 원문에서 확인하거나 잠시 후 다시 검색해 주세요.");
- const data=await r.json() as Raw;if(data.error)throw new MusicError("YouTube Music 응답 형식이 바뀌었거나 접근이 제한됐습니다.");
+ const data=await musicJson("https://music.youtube.com/youtubei/v1/"+endpoint+"?prettyPrint=false","YouTube Music",endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({context,...body})},YOUTUBE_TIMEOUT_MS) as Raw;
+ if(data.error)throw new MusicError("YouTube Music returned an API error.");
  return data;
 }
 export async function music(kind:string,value:string){
  if(!value.trim()||value.length>100)throw new MusicError("가수 이름은 1~100자로 입력해 주세요.",400);
  if(kind==="artist"&&!/^UC[A-Za-z0-9_-]{22}$/.test(value))throw new MusicError("올바른 아티스트 ID가 아닙니다.",400);
- const key=kind+":"+value,c=cache.get(key);if(c&&c.expires>Date.now())return c.data;if(jobs.has(key))return jobs.get(key);
+ const jobs=musicPending(),key="youtube:"+kind+":"+value,c=cache.get(key);if(c&&c.expires>Date.now())return c.data;if(jobs?.has(key))return jobs.get(key);
  const promise=(async()=>{try{
   const data=kind==="search"?parseSearch(await request("search",{query:value.trim(),params:"EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D"})):parseArtist(await request("browse",{browseId:value}),value);
   if(cache.size>=100)cache.delete(cache.keys().next().value!);cache.set(key,{expires:Date.now()+10*60*1000,data});return data;
- }catch(e){if(e instanceof MusicError)throw e;throw new MusicError("응답 시간이 길어지고 있습니다. 잠시 후 다시 시도해 주세요.");}finally{jobs.delete(key);}})();jobs.set(key,promise);return promise;
+ }finally{jobs?.delete(key);}})();jobs?.set(key,promise);return promise;
 }
 

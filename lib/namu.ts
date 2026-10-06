@@ -1,4 +1,5 @@
 import { load } from "cheerio/slim";
+import {inspectGenreDocument} from "./namu-genre";
 type Link={name:string;title:string};
 const cache=new Map<string,{expires:number;data:unknown}>();
 const inflight=new Map<string,Promise<unknown>>();
@@ -55,6 +56,8 @@ export function parseDocument(html:string,requested:string,kind:string){
    });
   });
  }
+ if(kind!=="artist")englishName=inspectGenreDocument(html,title).englishName;
+ if(kind==="genre-label")return {name:title,title,englishName};
  if(kind==="artist")return {name:englishName||title,title,englishName,genres,stars,checkedAt,isMusician:musician};
  const out:(Link&{evidence:"list"|"tag"})[]=[];
  const add=(items:Link[],evidence:"list"|"tag")=>{for(const x of items){
@@ -101,12 +104,13 @@ export function parseDocument(html:string,requested:string,kind:string){
  }
  const rootTitle=title.split(/[(/]/)[0];
  const artistPages=links($,$("body")).filter(x=>x.title.startsWith(rootTitle+"/")&&/(래퍼|뮤지션|음악가|가수|밴드)/.test(x.title.slice(rootTitle.length+1))).slice(0,2);
- return {name:title,title,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
+ return {name:title,title,englishName,artists:out.slice(0,240),explicit:out.some(x=>x.evidence==="list"),artistPages,totalLinks:out.length,truncated:out.length>240,checkedAt};
 }
-async function fetchDocument(title:string,search=false){
+async function fetchDocument(title:string,search=false,signal?:AbortSignal){
  let current=search?"https://namu.wiki/Search?q="+encodeURIComponent(title):"https://namu.wiki/w/"+encodeURIComponent(title);
  for(let redirects=0;redirects<4;redirects++){
-  const response=await fetch(current,{redirect:"manual",signal:AbortSignal.timeout(12000),headers:{"User-Agent":"GenreAtlas/1.0 (personal genre discovery)","Accept":"text/html"}});
+  const timeout=AbortSignal.timeout(12000);
+  const response=await fetch(current,{redirect:"manual",signal:signal?AbortSignal.any([signal,timeout]):timeout,headers:{"User-Agent":"GenreAtlas/1.0 (personal genre discovery)","Accept":"text/html"}});
   if(response.status>=300&&response.status<400){
    const target=new URL(response.headers.get("location")||"",current);
    if(target.origin!=="https://namu.wiki"||!target.pathname.startsWith("/w/"))throw new NamuError("문서 이동을 확인하지 못했습니다. 원문을 직접 확인해 주세요.");
@@ -125,11 +129,14 @@ export async function getNamu(title:string,kind:string){
  title=validTitle(title);const key=kind+":"+title,cached=cache.get(key);if(cached&&cached.expires>Date.now())return cached.data;
  if(inflight.has(key))return inflight.get(key);
  const job=(async()=>{try{
-  let data:ReturnType<typeof parseDocument>;
-  try{data=parseDocument(await fetchDocument(title),title,kind);}
+  const genreRequest=kind==="genre"||kind==="genre-label";
+  const signal=genreRequest?AbortSignal.timeout(18000):undefined;
+  let html="";
+  let data:ReturnType<typeof parseDocument>&{requestedTitle?:string;resolutionPath?:string[];sourceUrl?:string};
+  try{html=await fetchDocument(title,false,signal);data=parseDocument(html,title,kind);}
   catch(e){
    if(!(e instanceof NamuError)||e.status!==404)throw e;
-   const $=load(await fetchDocument(title,true));
+   const $=load(await fetchDocument(title,true,signal));
    const normalize=(s:string)=>s.normalize("NFKC").toLocaleLowerCase().replace(/[\s._’'‐–-]+/g,"");
    const matches:string[]=[];
    $('a[href^="/w/"]').each((_,el)=>{
@@ -137,7 +144,22 @@ export async function getNamu(title:string,kind:string){
     if(target!==title&&normalize(a.text().trim())===normalize(title)&&normalize(target)===normalize(title)&&!matches.includes(target))matches.push(target);
    });
    if(!matches.length)throw new NamuError("일치하는 가수 문서를 찾지 못했습니다. 한글 이름이나 나무위키의 정식 영문 이름으로 다시 검색해 주세요.",404);
-   data=parseDocument(await fetchDocument(matches[0]),matches[0],kind);
+   html=await fetchDocument(matches[0],false,signal);data=parseDocument(html,matches[0],kind);
+  }
+  if(genreRequest){
+   const initial=data,path=[data.title],visited=new Set(path);
+   for(let hops=0;hops<2;hops++){
+    const inspection=inspectGenreDocument(html,data.title);
+    if(inspection.isGenre)break;
+    const next=inspection.detailTitle;if(!next||visited.has(next))break;
+    visited.add(next);html=await fetchDocument(next,false,signal);data=parseDocument(html,next,kind);path.push(data.title);
+   }
+   const verified=inspectGenreDocument(html,data.title).isGenre;
+   // An unverified destination must not leak its artist list or English title.
+   if(!verified)data=initial;
+   data={...data,requestedTitle:title,resolutionPath:path,sourceUrl:"https://namu.wiki/w/"+encodeURIComponent(data.title)};
+   // Negative results must be retryable after transient source changes.
+   if(!verified||!data.englishName)return data;
   }
   if(cache.size>=100)cache.delete(cache.keys().next().value!);
   cache.set(key,{expires:Date.now()+15*60*1000,data});return data;

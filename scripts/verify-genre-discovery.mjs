@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {readFileSync} from "node:fs";
+import {createRequire} from "node:module";
 import ts from "typescript";
-import {parseDocument} from "../lib/namu.ts";
-
-// Transpile the server module for Node without altering the app's bundler imports.
-const source=await readFile(new URL("../lib/genre-discovery.ts",import.meta.url),"utf8");
-const code=ts.transpileModule(source.replace('"./namu"',JSON.stringify(new URL("../lib/namu.ts",import.meta.url).href)).replace('"./english-display"',JSON.stringify(new URL("../lib/english-display.ts",import.meta.url).href)),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {verifyGenreArtist,discoverGenre}=await import("data:text/javascript;base64,"+Buffer.from(code).toString("base64"));
+// Transpile local dependencies too: Node's strip-only mode cannot handle
+// constructor parameter properties or the app's extensionless imports.
+const require=createRequire(import.meta.url),modules=new Map();
+function loadModule(name){
+ if(modules.has(name))return modules.get(name);
+ const source=readFileSync(new URL("../lib/"+name+".ts",import.meta.url),"utf8");
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ const m={exports:{}};modules.set(name,m.exports);
+ new Function("exports","require","module",code)(m.exports,p=>p.startsWith("./")?loadModule(p.slice(2)):require(p),m);return m.exports;
+}
+const {parseDocument}=loadModule("namu");
+const {verifyGenreArtist,discoverGenre}=loadModule("genre-discovery");
 const link=(title)=>'<a class="wiki-link-internal" href="/w/'+encodeURIComponent(title)+'">'+title+'</a>';
 const page=(title,body)=>'<html><head><title>'+title+' - 나무위키</title></head><body>'+body+'</body></html>';
 const bio=(name,genre)=>page(name,'<table><tr><td>본명</td><td>'+name+'</td></tr><tr><td>장르</td><td>'+link(genre)+'</td></tr></table>');
