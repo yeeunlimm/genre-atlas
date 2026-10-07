@@ -1,10 +1,12 @@
 import {rankCandidates, type Candidate, type Memory} from './hybrid-station';
 import {PAIR_FEATURE_NAMES, PAIR_FEATURE_VERSION, creditRouteScore, pairFeatures} from './seed-pair-features';
 import type {StationTrack} from './station-catalog';
+import {CONTEXT_FEATURE_VERSION, contextFeatureNames, contextMetadata, normalizeContextGenre, songContextFeatures} from './song-context-features';
 
 export type RankerArtifact = {
-  format: 'genre-atlas-seed-catboost'; version: 1; modelId: string; approved: boolean;
+  format: 'genre-atlas-seed-catboost' | 'genre-atlas-song-context-catboost'; version: 1; modelId: string; approved: boolean;
   featureVersion: number; featureNames: string[];
+  genreVocabulary?: string[];
   normalization: {low: number; high: number}; scale: number; bias: number;
   trees: {splits: {feature: number; border: number}[]; leaves: number[]}[];
 };
@@ -13,23 +15,30 @@ export type RankerArtifact = {
 export function readRankerArtifact(value: unknown): RankerArtifact | null {
   if (!value || typeof value !== 'object') return null;
   const a = value as RankerArtifact;
-  if (a.format !== 'genre-atlas-seed-catboost' || a.version !== 1 || a.featureVersion !== PAIR_FEATURE_VERSION || a.approved !== true ||
+  const context = a.format === 'genre-atlas-song-context-catboost';
+  if (!context && a.format !== 'genre-atlas-seed-catboost') return null;
+  if (context && (!Array.isArray(a.genreVocabulary) || !a.genreVocabulary.length || a.genreVocabulary.length > 24 ||
+      !a.genreVocabulary.every(g => typeof g === 'string' && g.length > 0 && g.length <= 120 && normalizeContextGenre(g) === g) ||
+      new Set(a.genreVocabulary).size !== a.genreVocabulary.length)) return null;
+  const expectedFeatures = context ? contextFeatureNames(a.genreVocabulary!) : [...PAIR_FEATURE_NAMES];
+  if (a.version !== 1 || a.featureVersion !== (context ? CONTEXT_FEATURE_VERSION : PAIR_FEATURE_VERSION) || a.approved !== true ||
       typeof a.modelId !== 'string' || !/^[a-zA-Z0-9._-]{1,100}$/.test(a.modelId) ||
-      !Array.isArray(a.featureNames) || JSON.stringify(a.featureNames) !== JSON.stringify(PAIR_FEATURE_NAMES) ||
+      !Array.isArray(a.featureNames) || JSON.stringify(a.featureNames) !== JSON.stringify(expectedFeatures) ||
       !a.normalization || !bounded(a.normalization.low) || !bounded(a.normalization.high) || a.normalization.high - a.normalization.low < 1e-9 ||
       !bounded(a.scale) || !bounded(a.bias) || !Array.isArray(a.trees) || !a.trees.length || a.trees.length > 1000) return null;
   for (const t of a.trees) {
     if (!t || !Array.isArray(t.splits) || t.splits.length > 8 || !Array.isArray(t.leaves) || t.leaves.length !== 2 ** t.splits.length || !t.leaves.every(bounded)) return null;
-    for (const s of t.splits) if (!s || !Number.isInteger(s.feature) || s.feature < 0 || s.feature >= PAIR_FEATURE_NAMES.length || !Number.isFinite(s.border)) return null;
+    for (const s of t.splits) if (!s || !Number.isInteger(s.feature) || s.feature < 0 || s.feature >= expectedFeatures.length || !Number.isFinite(s.border)) return null;
   }
   // Whitelist fields: accidental training rows or CatBoost model_info must not be served.
   return {format: a.format, version: 1, modelId: a.modelId, approved: true, featureVersion: a.featureVersion, featureNames: [...a.featureNames],
+    ...(context ? {genreVocabulary: [...a.genreVocabulary!]} : {}),
     normalization: {low: a.normalization.low, high: a.normalization.high}, scale: a.scale, bias: a.bias,
     trees: a.trees.map(t => ({splits: t.splits.map(s => ({feature: s.feature, border: s.border})), leaves: [...t.leaves]}))};
 }
 const bounded = (n: number) => Number.isFinite(n) && Math.abs(n) <= 1e6;
 export function predictPair(model: RankerArtifact, x: number[]): number {
-  if (x.length !== PAIR_FEATURE_NAMES.length || !x.every(n => Number.isFinite(n) && (n === -1 || n >= 0 && n <= 1))) throw new Error('Invalid seed-pair features');
+  if (x.length !== model.featureNames.length || !x.every(n => Number.isFinite(n) && (n === -1 || n >= 0 && n <= 1))) throw new Error('Invalid seed-pair features');
   let total = 0;
   for (const t of model.trees) {
     let index = 0;
@@ -42,11 +51,17 @@ export function blendScore(credits: number, raw: number, normalization: RankerAr
   const modelScore = Math.max(0, Math.min(1, (raw - normalization.low) / (normalization.high - normalization.low)));
   return {credits, modelScore, total: .8 * credits + .2 * modelScore};
 }
+export function rankerCanScoreSeed(model: RankerArtifact | null, seeds: StationTrack[]): boolean {
+  return !!model && seeds.length === 1 && (model.format !== 'genre-atlas-song-context-catboost' || contextMetadata(seeds[0]).genres.length > 0);
+}
 export function rankSongCandidates(rows: Candidate[], seeds: StationTrack[], memory: Memory, consumed: StationTrack[] = [], model: RankerArtifact | null = null, now = Date.now()): Candidate[] {
-  if (!model || seeds.length !== 1) return rankCandidates(rows, seeds, memory, consumed, now);
+  if (!model || !rankerCanScoreSeed(model, seeds)) return rankCandidates(rows, seeds, memory, consumed, now);
   try {
     return rankCandidates(rows, seeds, memory, consumed, now, row => {
-      const score = blendScore(creditRouteScore(row, seeds[0]), predictPair(model, pairFeatures(seeds[0], row)), model.normalization).total;
+      const x = model.format === 'genre-atlas-song-context-catboost'
+        ? songContextFeatures(contextMetadata(seeds[0]), contextMetadata(row.track), model.genreVocabulary!)
+        : pairFeatures(seeds[0], row);
+      const score = blendScore(creditRouteScore(row, seeds[0]), predictPair(model, x), model.normalization).total;
       if (!Number.isFinite(score)) throw new Error('Invalid ranking score');
       return score;
     });

@@ -14,5 +14,5 @@ export async function GET() {
     const artifact = readRankerArtifact(JSON.parse(await readFile(file, 'utf8')));
     if (artifact) return Response.json({status: 'ready', artifact}, {headers});
   } catch { /* Missing/invalid/unapproved model is an expected cold start. */ }
-  return Response.json({status: 'unavailable', message: 'No approved seed-pair CatBoost model. Existing source ranking remains active.'}, {headers});
+  return Response.json({status: 'unavailable', message: 'No approved selected-song CatBoost model. Existing source ranking remains active.'}, {headers});
 }
