@@ -68,7 +68,7 @@ function find(node, predicate) {
   return predicate(node) ? node : find(node.props?.children, predicate);
 }
 
-async function runComponent({likes = [seed], availability = {ready: true}} = {}) {
+async function runComponent({likes = [seed], availability = {ready: true}, cached = null, userId = 'fixture-user', click = true, storageFails = false} = {}) {
   const liked = structuredClone(likes);
   const originalLikes = structuredClone(liked);
   const states = [], effects = [], cleanups = [], events = [], writes = [], requests = [];
@@ -78,8 +78,8 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
   Object.defineProperty(global, 'localStorage', {
     configurable: true,
     value: {
-      getItem: () => JSON.stringify(previousHistory),
-      setItem: (key, value) => writes.push({key, value: JSON.parse(value)}),
+      getItem: key => key === 'genre-atlas.playlist-candidates.v1:fixture-user' ? cached : key.startsWith('genre-atlas.liked-playlist.v1:') ? JSON.stringify(previousHistory) : null,
+      setItem: (key, value) => {if(storageFails)throw new Error('Storage full');writes.push({key, value: JSON.parse(value)});},
     },
   });
   const hooks = {
@@ -144,7 +144,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
   });
   try {
     const {LikedPlaylist} = componentLoad('components/liked-playlist.tsx');
-    const tree = LikedPlaylist({userId: 'fixture-user', liked, memory: blankMemory(), learning: {}});
+    const tree = LikedPlaylist({userId, liked, memory: blankMemory(), learning: {}});
     for (const effect of effects) {
       const cleanup = effect();
       if (typeof cleanup === 'function') cleanups.push(cleanup);
@@ -153,7 +153,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
     assert.ok(button, 'The real playlist button should be rendered.');
     assert.equal(button.props.disabled, !liked.length);
     // Invoke even when disabled to verify the handler itself enforces no-likes.
-    button.props.onClick();
+    if(click)button.props.onClick();
     for (let turn = 0; states[3] && turn < 100; turn++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(states[3], false, 'The mocked playlist operation should finish.');
     assert.deepEqual(liked, originalLikes, 'Playlist creation must not change the likes.');
@@ -196,11 +196,35 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
     assert.ok(selected.every(row => shortlist.some(candidate => candidate.track.id === row.track.id)));
     assert.equal(new Set(selected.map(row => row.track.artistId)).size, 10);
     assert.equal(ready.states[5], '');
-    assert.equal(ready.writes.length, 1);
-    assert.equal(ready.writes[0].key, 'genre-atlas.liked-playlist.v1:fixture-user');
-    assert.equal(ready.writes[0].value.recent['previous:selection'], ready.previousHistory.recent['previous:selection']);
-    for (const row of selected) assert.ok(Number.isFinite(ready.writes[0].value.recent[songKey(row.track)]));
-    assert.equal(Object.keys(ready.writes[0].value.recent).length, 11);
+    const historyWrites=ready.writes.filter(w=>w.key==='genre-atlas.liked-playlist.v1:fixture-user');
+    assert.equal(historyWrites.length, 1);
+    assert.equal(historyWrites[0].value.recent['previous:selection'], ready.previousHistory.recent['previous:selection']);
+    for (const row of selected) assert.ok(Number.isFinite(historyWrites[0].value.recent[songKey(row.track)]));
+    assert.equal(Object.keys(historyWrites[0].value.recent).length, 11);
+    const snapshots=ready.writes.filter(w=>w.key==='genre-atlas.playlist-candidates.v1:fixture-user');
+    assert.equal(snapshots.length,22,'Save shortlist immediately, each result, and final selection');
+    const cached=JSON.stringify(snapshots.at(-1).value);
+    const restored=await runComponent({cached,click:false});
+    assert.equal(restored.states[1].length,20);assert.equal(restored.states[0].length,10);
+    assert.equal(Object.keys(restored.states[2]).length,20);
+    assert.deepEqual(restored.requests,[],'Restoring must not collect or analyse again');
+    assert.deepEqual(restored.writes,[]);
+    const other=await runComponent({cached,click:false,userId:'other-user'});
+    assert.deepEqual(other.states[1],[],'Another account must not restore this snapshot');
+    const changedLikes=await runComponent({cached,click:false,likes:[]});
+    assert.equal(changedLikes.states[1].length,20,'Removing likes keeps historical candidates');
+    const failedRetry=await runComponent({cached,availability:{ready:false}});
+    assert.equal(failedRetry.states[1].length,20,'Failed preflight keeps previous candidates');
+    assert.deepEqual(failedRetry.writes,[]);
+    const partial=await runComponent({cached:JSON.stringify(snapshots[0].value),click:false});
+    assert.equal(partial.states[1].length,20);assert.equal(partial.states[0],null);
+    assert.deepEqual(partial.states[2],{},'Interrupted analysis keeps candidates without invented scores');
+    const full=await runComponent({storageFails:true});
+    assert.equal(full.states[0].length,10);assert.match(full.states[8],/could not be saved/);
+    const codec=load('lib/playlist-candidate-cache.ts');
+    for(const raw of ['bad', '{}', JSON.stringify({...snapshots[0].value,candidates:[{}]}),JSON.stringify({...snapshots[0].value,candidates:Array(21).fill(shortlist[0])})])assert.equal(codec.readCandidateSnapshot(raw),null);
+    const malformed=JSON.parse(cached);const firstKey=Object.keys(malformed.reviews)[0];malformed.reviews[firstKey].summary.score='oops';
+    assert.equal(codec.readCandidateSnapshot(JSON.stringify(malformed)).reviews[firstKey],undefined);
 
     const empty = await runComponent({likes: []});
     assert.deepEqual(empty.requests, []);
