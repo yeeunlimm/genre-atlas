@@ -1,4 +1,13 @@
-# vinext-starter
+# Genre Atlas
+
+음악과 아티스트를 탐색하고 나만의 플레이리스트를 만드는 음악 디스커버리 프로젝트입니다.
+
+## 바로가기
+
+- **[배포 사이트 열기](https://project-9oimu.vercel.app/)**
+- **[발표자료 보기 (PDF)](presentation/Genre_Atlas.pdf)**
+
+## 개발 환경 및 스타터 안내
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 
