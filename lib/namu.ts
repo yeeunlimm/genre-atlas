@@ -3,7 +3,7 @@ import {inspectGenreDocument} from "./namu-genre";
 type Link={name:string;title:string};
 const cache=new Map<string,{expires:number;data:unknown}>();
 const inflight=new Map<string,Promise<unknown>>();
-export class NamuError extends Error{constructor(message:string,public status=502){super(message);}}
+export class NamuError extends Error{constructor(message:string,public status=502,public upstreamStatus?:number){super(message);}}
 export function validTitle(title:string){
  if(!title.trim()||title.length>100||/[\u0000-\u001f]/.test(title))throw new NamuError("문서 이름은 1~100자로 입력해 주세요.",400);
  return title.trim();
@@ -117,7 +117,7 @@ export async function fetchNamuDocument(title:string,search=false,signal?:AbortS
    if(target.origin!=="https://namu.wiki"||!target.pathname.startsWith("/w/"))throw new NamuError("문서 이동을 확인하지 못했습니다. 원문을 직접 확인해 주세요.");
    current=target.href;continue;
   }
-  if(!response.ok)throw new NamuError(response.status===404?"같은 이름의 문서를 찾지 못했습니다. 정확한 문서명을 입력해 주세요.":"나무위키에 연결할 수 없습니다. 잠시 후 다시 시도하거나 내용을 붙여넣어 주세요.",response.status===404?404:502);
+  if(!response.ok)throw new NamuError(response.status===404?"같은 이름의 문서를 찾지 못했습니다. 정확한 문서명을 입력해 주세요.":"나무위키에 연결할 수 없습니다. 잠시 후 다시 시도하거나 원문을 확인해 주세요.",response.status===404?404:502,response.status);
   if(!response.headers.get("content-type")?.includes("text/html"))throw new NamuError("읽을 수 있는 나무위키 문서가 아닙니다.");
   const reader=response.body?.getReader();if(!reader)throw new NamuError("문서 내용이 비어 있습니다.");
   const decoder=new TextDecoder();let html="",total=0;

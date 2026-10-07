@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
+import {createPortal} from "react-dom";
 import {Radio,Play,SkipForward,ThumbsUp,ThumbsDown,RotateCcw,Search} from "lucide-react";
 import {stationCatalog,type StationTrack} from "@/lib/station-catalog";
 import {recommend,trackYouTubeUrl} from "@/lib/discovery-station";
@@ -21,7 +22,7 @@ import {PlaylistImport} from "./playlist-import";
 const picks=[{title:"SKELETONS",artist:"Travis Scott"},{title:"New Drug",artist:"Sunset Rollercoaster"},{title:"Victory Lap",artist:"Fred again.."},{title:"Boy's a liar",artist:"PinkPantheress"},{title:"Summer Gypsy",artist:"Nujabes"}];
 const asCredits=(seed:StationTrack,rows:ReturnType<typeof recommend>):Candidate[]=>rows.filter(r=>r.reasons.some(x=>x.kind==="credit"||x.kind==="sample")).map(r=>({...r,paths:[{route:"credits",seedId:seed.id,confidence:Math.min(.95,.6+r.score*.035)}]}));
 
-export function DiscoveryStation(){
+export function DiscoveryStation({playlistTarget}:{playlistTarget?:HTMLElement|null}){
   const account=useAccount();
   const identityRequest=useRef(0);
   useEffect(()=>{if(account.ready&&mounted.current&&identity.current!==undefined&&identity.current!==account.userId)void loadIdentity();},[account.ready,account.userId]);
@@ -191,7 +192,10 @@ export function DiscoveryStation(){
         <div className="station-feedback">{likeControl(shown.track,shown)}<button disabled={liking} onClick={()=>advance("dislike")}><ThumbsDown size={16}/>Not for me</button><button disabled={liking} onClick={()=>void start(shown.track)}>Explore this song</button></div>
         <details className="station-evidence"><summary>Why this track?</summary><ul>{shown.reasons.map((reason,i)=><li key={i}><b>{reason.label}</b><span>{reason.detail}</span></li>)}</ul><div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div><small>Connections are discovery signals, not a guarantee of the same sound. Discovery uses neutral source weights, without saved-like or learned preference boosts.</small></details>
       </article><details className="station-upnext"><summary>Up next · {queue.length}</summary>{queue.slice(0,4).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{routeLabels[row.paths[0].route]}</span></div>)}</details></>:<div className="station-empty" role="status"><Radio size={42} strokeWidth={1}/><h3>{!seeds.length?"It starts with one song.":finding?"Finding your next discovery…":emptyMessage.title}</h3><p>{!seeds.length?"Search a song and select it. No playlist to prepare.":finding?"We’re checking more candidates before calling this mix finished. Your album and artist limits stay in place.":emptyMessage.detail}</p>{seeds.length>0&&!finding&&(emptyMessage.failed||emptyMessage.more)&&<button onClick={retrySources}>{emptyMessage.failed?"Retry unavailable sources":"Find more songs"}</button>}</div>}
-      {userId&&hydrated&&<LikedSongs liked={liked} disabled={liking} onExplore={track=>void start(track)} onRemove={removeLiked}/>}
+      {playlistTarget&&account.userId&&(!hydrated||userId!==account.userId)&&createPortal(<div className="playlist-load-status" role="status"><p>{authError||"Loading your playlist…"}</p>{authError&&<button className="secondary" onClick={()=>void loadIdentity()}>Retry playlist</button>}</div>,playlistTarget)}
+      {account.ready&&userId===account.userId&&userId&&hydrated&&(playlistTarget?createPortal(
+        <LikedSongs key={userId} compact liked={liked} disabled={liking} onExplore={track=>{void start(track);document.getElementById("discovery-station")?.scrollIntoView({block:"start"});}} onRemove={removeLiked}/>,playlistTarget
+      ):<LikedSongs key={userId} liked={liked} disabled={liking} onExplore={track=>void start(track)} onRemove={removeLiked}/>)}
       {userId&&hydrated&&<PlaylistImport key={userId} onAdd={async tracks=>{
         const expected=userId;
         const response=await accountFetch('/api/station/session');

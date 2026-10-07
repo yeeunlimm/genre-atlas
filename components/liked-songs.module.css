@@ -38,3 +38,14 @@
 .arcStage .cover[data-active=true]{box-shadow:0 0 0 2px #ddd,2px 5px 18px #0008}
 @media(prefers-reduced-motion:reduce){.arcStage .cover{transition:none}}
 .arcStage .covers{inset:0 0 0 8%}
+.compact{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:8px;max-width:none;margin:0;padding:0}
+.compact .header{grid-column:1/-1;text-align:left;margin:0}
+.compact .arcStage{grid-column:1;grid-row:2;width:100%;height:360px;aspect-ratio:auto;margin:8px 0}
+.compact .arcStage .cover{width:44px;min-width:44px}
+.compact .detail{grid-column:2;grid-row:2;align-self:center;border:0;padding:12px 0;text-align:left;min-width:0}
+.compact .detail h4{font-size:clamp(18px,2vw,24px)}
+.compact .detail p{font-size:12px}
+.compact .detail .actions{justify-content:flex-start}
+.compact>.actions{grid-column:1;grid-row:3;margin:0 0 12px}
+.compact .footer{grid-column:1/-1;font-size:10px}
+@media(max-width:380px){.compact{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}.compact .detail .actions{gap:6px}.compact .detail .actions>*{padding-inline:7px}}

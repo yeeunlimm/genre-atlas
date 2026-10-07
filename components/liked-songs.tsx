@@ -23,7 +23,7 @@ function RecordCaption({title,artist}:{title:string;artist:string}){
   return <div ref={box} className={styles.labelCopy}><b>{title}</b><small>{artist}</small></div>;
 }
 
-export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:StationTrack[];onExplore:(track:StationTrack)=>void;onRemove:(track:StationTrack)=>void;disabled?:boolean}){
+export function LikedSongs({liked,onExplore,onRemove,disabled=false,compact=false}:{liked:StationTrack[];onExplore:(track:StationTrack)=>void;onRemove:(track:StationTrack)=>void;disabled?:boolean;compact?:boolean}){
   const [selected,setSelected]=useState<string|null>(null),[hovered,setHovered]=useState<string|null>(null);
   const [shuffleSeed,setShuffleSeed]=useState(1);
   useEffect(()=>{setShuffleSeed(crypto.getRandomValues(new Uint32Array(1))[0]);},[]);
@@ -38,7 +38,7 @@ export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:Stat
   });
   const step=(delta:number)=>{if(arranged.length){setSelected(songKey(arranged[(center+delta+arranged.length)%arranged.length]));setHovered(null);}};
   const active=liked.find(t=>songKey(t)===(hovered||selected))||arranged[center];
-  return <section className={styles.sleeve} id="liked-songs" aria-label="Liked songs">
+  return <section className={styles.sleeve+(compact?" "+styles.compact:"")} id="liked-songs" aria-label="Liked songs">
     <header className={styles.header}><span>YOUR PLAYLIST / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
     <div className={`${styles.stage} ${styles.arcStage}`}>
       <div className={styles.record} aria-hidden="true"><div className={styles.label}><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>

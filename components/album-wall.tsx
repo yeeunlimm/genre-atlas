@@ -1,7 +1,6 @@
 "use client";
 
 import {useRef,useState} from "react";
-import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
 import collection from "@/lib/album-collection.json";
 
 type Album=(typeof collection.albums)[number];
@@ -23,32 +22,30 @@ function RecordSleeve({album,large=false}:{album:Album;large?:boolean}){
 }
 
 export function AlbumWall({onExploreArtist}:{onExploreArtist:(name:string)=>void}){
- const [selected,setSelected]=useState<Album|null>(null);
- const opener=useRef<HTMLButtonElement|null>(null);
- const exploring=useRef(false);
+ const albums=[...collection.albums,...collection.rightColumn];
+ const [selected,setSelected]=useState<Album>(albums[0]);
+ const rail=useRef<HTMLDivElement|null>(null);
  const renderAlbum=(album:Album)=><button key={album.sourceUrl} type="button" className="album-tile"
-   aria-label={"View "+album.title+" by "+album.artist} aria-haspopup="dialog"
+   aria-label={"View "+album.title+" by "+album.artist} aria-pressed={selected.sourceUrl===album.sourceUrl}
    title={album.artist+" — "+album.title}
-   onClick={event=>{exploring.current=false;opener.current=event.currentTarget;setSelected(album);}}>
+   onClick={()=>setSelected(album)}>
    <RecordSleeve album={album}/>
   </button>;
  return <section className="album-wall" id="the-collection" aria-label="Album cover collection">
-  <div className="album-wall-heading"><span>THE COLLECTION</span><span>SELECT A COVER</span></div>
-  <div className="album-wall-grid">
-   <div className="album-wall-main">{collection.albums.map(renderAlbum)}</div>
-   <div className="album-wall-extension">{collection.rightColumn.map(renderAlbum)}</div>
+  <div className="album-wall-heading"><span>THE COLLECTION</span><span>{String(albums.indexOf(selected)+1).padStart(2,"0")} / {albums.length}</span></div>
+  <div className="album-wall-body">
+  <div className="album-feature">
+   <RecordSleeve key={selected.sourceUrl} album={selected} large/>
+   <div className="album-inline-details" aria-live="polite">
+    <a className="album-title-link" href={"/album?"+new URLSearchParams({collection:selected.sourceUrl,artist:selected.artist})} title="Open album details">{selected.title} <span aria-hidden="true">↗</span></a>
+    <div className="collection-artists">{(selected.artist.includes(" & ")?selected.artist.split(/,\s*|\s+&\s+/):[selected.artist]).map((name,i)=><span key={name}>{i>0&&<span aria-hidden="true"> · </span>}<button type="button" className="album-artist-link" title={"Discover "+name} onClick={()=>onExploreArtist(name)}>{name} <span aria-hidden="true">→</span></button></span>)}</div>
+   </div>
   </div>
-  <Dialog open={selected!==null} onOpenChange={open=>{if(!open)setSelected(null);}}>
-   <DialogContent className="album-dialog" onCloseAutoFocus={event=>{event.preventDefault();if(!exploring.current)opener.current?.focus();}}>
-    {selected&&<>
-     <RecordSleeve key={selected.sourceUrl} album={selected} large/>
-     <DialogHeader>
-      <DialogTitle><a className="album-title-link" href={"/album?"+new URLSearchParams({collection:selected.sourceUrl,artist:selected.artist})}>{selected.title}</a></DialogTitle>
-      <DialogDescription asChild><div className="collection-artists">{(selected.artist.includes(" & ")?selected.artist.split(/,\s*|\s+&\s+/):[selected.artist]).map((name,i)=><span key={name}>{i>0&&<span aria-hidden="true"> · </span>}<button type="button" className="album-artist-link" onClick={()=>{exploring.current=true;setSelected(null);onExploreArtist(name);}}>{name}</button></span>)}</div></DialogDescription>
-     </DialogHeader>
-     <a className="album-credit" href={selected.sourceUrl} target="_blank" rel="noreferrer">Artwork source ↗</a>
-    </>}
-   </DialogContent>
-  </Dialog>
+   <div className="album-browser">
+    <button className="album-scroll-button" type="button" aria-label="Scroll albums up" onClick={()=>rail.current?.scrollBy({top:-200})}>↑</button>
+    <div ref={rail} className="album-scroll-rail" role="group" aria-label="Choose a collection album">{albums.map(renderAlbum)}</div>
+    <button className="album-scroll-button" type="button" aria-label="Scroll albums down" onClick={()=>rail.current?.scrollBy({top:200})}>↓</button>
+   </div>
+  </div>
  </section>;
 }

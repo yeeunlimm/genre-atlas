@@ -20,7 +20,7 @@ async function main(){
  const docs={'그라임':overview('그라임','그라임 음악'),'그라임 음악':detail('그라임 음악','Grime'),'첫 안내':overview('첫 안내','둘째 안내'),'둘째 안내':overview('둘째 안내','최종 음악'),'최종 음악':detail('최종 음악','Final Genre'),'순환 하나':overview('순환 하나','순환 둘'),'순환 둘':overview('순환 둘','순환 하나'),'제한 하나':overview('제한 하나','제한 둘'),'제한 둘':overview('제한 둘','제한 셋'),'제한 셋':overview('제한 셋','제한 넷')};
  const requested=[];let fail=false;
  global.fetch=async(input)=>{const title=decodeURIComponent(new URL(input).pathname.slice(3));requested.push(title);if(fail&&title==='그라임 음악')return new Response('',{status:403});assert.ok(title in docs,'unexpected fetch: '+title);return new Response(docs[title],{headers:{'content-type':'text/html'}});};
- fail=true;await assert.rejects(()=>namu.getNamu('그라임','genre-label'));fail=false;
+ fail=true;await assert.rejects(()=>namu.getNamu('그라임','genre-label'),e=>e instanceof namu.NamuError&&e.status===502&&e.upstreamStatus===403);fail=false;
  const resolved=await namu.getNamu('그라임','genre-label');assert.equal(resolved.englishName,'Grime');assert.equal(resolved.title,'그라임 음악');assert.deepEqual(resolved.resolutionPath,['그라임','그라임 음악']);assert.equal(resolved.requestedTitle,'그라임');assert(!requested.includes('GRIME'));
  const before=requested.length;await namu.getNamu('그라임','genre-label');assert.equal(requested.length,before,'verified resolution is cached');
  const collection=await namu.getNamu('그라임','genre');assert.equal(collection.title,'그라임 음악','genre collections resolve to the same document');
