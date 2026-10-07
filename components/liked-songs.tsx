@@ -28,36 +28,29 @@ export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:Stat
   const [shuffleSeed,setShuffleSeed]=useState(1);
   useEffect(()=>{setShuffleSeed(crypto.getRandomValues(new Uint32Array(1))[0]);},[]);
   const arranged=useMemo(()=>shuffledVinyl(liked,shuffleSeed),[liked,shuffleSeed]);
-  const [phase,setPhase]=useState(0),[paused,setPaused]=useState(false),[engaged,setEngaged]=useState(false);
-  const [reduced,setReduced]=useState(false);
-  useEffect(()=>{const media=matchMedia('(prefers-reduced-motion: reduce)');const sync=()=>setReduced(media.matches);sync();media.addEventListener('change',sync);return()=>media.removeEventListener('change',sync);},[]);
-  useEffect(()=>{
-    if(paused||engaged||reduced||arranged.length<2)return;
-    let frame=0,last=0;
-    const tick=(now:number)=>{if(!last)last=now;const elapsed=now-last;if(elapsed>=33){if(!document.hidden)setPhase(p=>(p+Math.min(elapsed,100)/4500)%arranged.length);last=now;}frame=requestAnimationFrame(tick);};
-    frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);
-  },[paused,engaged,reduced,arranged.length]);
-  const slots=Math.min(5,arranged.length);
-  const visible=Array.from({length:Math.min(slots+1,arranged.length)},(_,offset)=>{
-    const index=(Math.floor(phase)+offset)%arranged.length;
-    const t=(offset-(phase%1)+.5)/Math.max(1,slots);
+  const center=Math.max(0,arranged.findIndex(t=>songKey(t)===selected));
+  const slots=Math.min(9,arranged.length);
+  const visible=Array.from({length:slots},(_,offset)=>{
+    const relative=offset-Math.floor(slots/2);
+    const index=(center+relative+arranged.length)%arranged.length;
+    const t=.5+relative/10;
     return {track:arranged[index],t};
   });
-  const step=(delta:number)=>{setPaused(true);setPhase(p=>(Math.floor(p)+delta+arranged.length)%Math.max(1,arranged.length));};
-  const active=liked.find(t=>songKey(t)===(hovered||selected))||liked[0];
+  const step=(delta:number)=>{if(arranged.length){setSelected(songKey(arranged[(center+delta+arranged.length)%arranged.length]));setHovered(null);}};
+  const active=liked.find(t=>songKey(t)===(hovered||selected))||arranged[center];
   return <section className={styles.sleeve} id="liked-songs" aria-label="Liked songs">
     <header className={styles.header}><span>YOUR PLAYLIST / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
-    <div className={`${styles.stage} ${styles.arcStage}`} onMouseEnter={()=>setEngaged(true)} onMouseLeave={()=>setEngaged(false)} onFocusCapture={()=>setEngaged(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setEngaged(false);}}>
+    <div className={`${styles.stage} ${styles.arcStage}`}>
       <div className={styles.record} aria-hidden="true"><div className={styles.label}><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>
       <div className={styles.covers} role="group" aria-label="Liked songs around the record">
         {visible.map(({track,t})=>{const key=songKey(track);
-          return <button key={key} type="button" className={styles.cover} style={{left:(12+28*Math.sin(Math.PI*t))+'%',top:(5+90*t)+'%',opacity:Math.max(0,Math.min(1,t*12,(1-t)*12)),'--tilt':(-50+100*t)+'deg','--dx':'8px','--dy':'0px','--depth':1,visibility:t<0||t>1?'hidden':'visible'} as CSSProperties} data-active={!!active&&songKey(active)===key} aria-label={`${track.title} — ${track.artist}`} aria-pressed={selected===key} aria-controls="liked-song-detail" onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setSelected(key)} onClick={()=>{setSelected(key);setPaused(true);}} onKeyDown={e=>{if(e.key==='Escape'){setSelected(null);setHovered(null);}}}>
+          return <button key={key} type="button" className={styles.cover} style={{left:(10+35*Math.sin(Math.PI*t))+'%',top:(2+96*t)+'%','--tilt':(-65+130*t)+'deg','--dx':'8px','--dy':'0px','--depth':1} as CSSProperties} data-active={t===.5} aria-label={`${track.title} — ${track.artist}`} aria-pressed={t===.5} aria-controls="liked-song-detail" onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} onClick={()=>{setSelected(key);setHovered(null);}} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();step(1);}if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();step(-1);}}}>
             <StationArtwork track={track} size="seed"/>
           </button>;
         })}
       </div>
     </div>
-    {liked.length>1&&<div className={styles.actions} aria-label="Playlist motion controls"><button onClick={()=>step(-1)} aria-label="Previous playlist cover">←</button><button onClick={()=>{setPaused(p=>!p);setHovered(null);}} disabled={reduced}>{reduced?'Manual browsing':paused?'Play':'Pause'}</button><button onClick={()=>step(1)} aria-label="Next playlist cover">→</button></div>}
+    {liked.length>1&&<div className={styles.actions} aria-label="Playlist navigation"><button onClick={()=>step(-1)} aria-label="Previous playlist cover">←</button><button onClick={()=>step(1)} aria-label="Next playlist cover">→</button></div>}
     <div id="liked-song-detail" className={styles.detail}>
       {active?<><span className={styles.eyebrow}>ON YOUR RECORD</span><h4>{active.title}</h4><p>{active.artist} <span> / {active.album}</span></p><div className={styles.actions}>
         <a href={trackYouTubeUrl(active)} target="_blank" rel="noreferrer" aria-label={'Listen to '+active.title}>Listen ↗</a>

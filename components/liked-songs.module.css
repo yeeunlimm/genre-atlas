@@ -31,8 +31,10 @@
 .detail p{font-family:Arial,Helvetica,sans-serif;font-weight:500;letter-spacing:.015em}
 .cover{z-index:var(--depth,1)}
 .cover[data-active=true],.cover:hover,.cover:focus-visible{z-index:2000}
-.arcStage{max-width:460px;aspect-ratio:1.12;overflow:hidden;margin-block:16px}
+.arcStage{max-width:520px;aspect-ratio:.88;overflow:hidden;margin-block:16px}
 .arcStage .record{display:none}
 .arcStage .label{display:none}
-.arcStage .cover{width:15%;min-width:44px;padding:0!important;border:0!important;background:transparent;box-shadow:2px 5px 12px #0008}
+.arcStage .cover{width:11%;min-width:44px;padding:0!important;border:0!important;background:transparent;box-shadow:2px 5px 12px #0008;transition:left .4s ease,top .4s ease,transform .4s ease}
+.arcStage .cover[data-active=true]{box-shadow:0 0 0 2px #ddd,2px 5px 18px #0008}
+@media(prefers-reduced-motion:reduce){.arcStage .cover{transition:none}}
 .arcStage .covers{inset:0 0 0 8%}
