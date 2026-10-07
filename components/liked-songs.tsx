@@ -1,9 +1,9 @@
 "use client";
-import {useState,useEffect,useRef,type CSSProperties} from 'react';
+import {useState,useEffect,useRef,useMemo,type CSSProperties} from 'react';
 import type {StationTrack} from '@/lib/station-catalog';
 import {trackYouTubeUrl} from '@/lib/discovery-station';
 import {songKey} from '@/lib/hybrid-station';
-import {vinylPosition} from '@/lib/vinyl-layout';
+import {vinylPosition,shuffledVinyl} from '@/lib/vinyl-layout';
 import {StationArtwork} from './station-artwork';
 import styles from './liked-songs.module.css';
 
@@ -25,15 +25,18 @@ function RecordCaption({title,artist}:{title:string;artist:string}){
 
 export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:StationTrack[];onExplore:(track:StationTrack)=>void;onRemove:(track:StationTrack)=>void;disabled?:boolean}){
   const [selected,setSelected]=useState<string|null>(null),[hovered,setHovered]=useState<string|null>(null);
+  const [shuffleSeed,setShuffleSeed]=useState(1);
+  useEffect(()=>{setShuffleSeed(crypto.getRandomValues(new Uint32Array(1))[0]);},[]);
+  const arranged=useMemo(()=>shuffledVinyl(liked,shuffleSeed),[liked,shuffleSeed]);
   const active=liked.find(t=>songKey(t)===(hovered||selected))||liked[0];
   return <section className={styles.sleeve} id="liked-songs" aria-label="Liked songs">
     <header className={styles.header}><span>YOUR PLAYLIST / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
     <div className={styles.stage}>
       <div className={styles.record} aria-hidden="true"><div className={styles.label}><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>
       <div className={styles.covers} role="group" aria-label="Liked songs around the record">
-        {liked.map((track,index)=>{const key=songKey(track),p=vinylPosition(index,liked.length);
-          return <button key={key} type="button" className={styles.cover} style={{left:p.x+'%',top:p.y+'%','--tilt':p.tilt+'deg','--dx':p.dx+'px','--dy':p.dy+'px'} as CSSProperties} data-active={!!active&&songKey(active)===key} aria-label={`${index+1}. ${track.title} — ${track.artist}`} aria-pressed={selected===key} aria-controls="liked-song-detail" onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setSelected(key)} onClick={()=>setSelected(key)} onKeyDown={e=>{if(e.key==='Escape'){setSelected(null);setHovered(null);}}}>
-            <StationArtwork track={track} size="seed"/><span className={styles.number}>{String(index+1).padStart(2,'0')}</span>
+        {arranged.map((track,index)=>{const key=songKey(track),p=vinylPosition(index,arranged.length);
+          return <button key={key} type="button" className={styles.cover} style={{left:p.x+'%',top:p.y+'%','--tilt':p.tilt+'deg','--dx':p.dx+'px','--dy':p.dy+'px','--depth':p.depth} as CSSProperties} data-active={!!active&&songKey(active)===key} aria-label={`${track.title} — ${track.artist}`} aria-pressed={selected===key} aria-controls="liked-song-detail" onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setSelected(key)} onClick={()=>setSelected(key)} onKeyDown={e=>{if(e.key==='Escape'){setSelected(null);setHovered(null);}}}>
+            <StationArtwork track={track} size="seed"/>
           </button>;
         })}
       </div>

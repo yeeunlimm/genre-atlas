@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),React=require('react');
 const {renderToStaticMarkup}=require('react-dom/server');
 const m={exports:{}};
-new Function('exports','module','require',ts.transpileModule(fs.readFileSync('components/liked-songs.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText)(m.exports,m,id=>id.endsWith('.module.css')?{default:{}}:id==='./station-artwork'?{StationArtwork:()=>React.createElement('span',null,'Cover')}:id==='@/lib/vinyl-layout'?{vinylPosition:(i,n)=>({x:50,y:50,dx:0,dy:0,tilt:0})}:id==='@/lib/discovery-station'?{trackYouTubeUrl:()=> 'https://www.youtube.com/'}:id==='@/lib/hybrid-station'?{songKey:t=>t.id}:require(id));
+new Function('exports','module','require',ts.transpileModule(fs.readFileSync('components/liked-songs.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText)(m.exports,m,id=>id.endsWith('.module.css')?{default:{}}:id==='./station-artwork'?{StationArtwork:()=>React.createElement('span',null,'Cover')}:id==='@/lib/vinyl-layout'?{shuffledVinyl:items=>[...items],vinylPosition:(i,n)=>({x:50,y:50,dx:0,dy:0,tilt:0,depth:1})}:id==='@/lib/discovery-station'?{trackYouTubeUrl:()=> 'https://www.youtube.com/'}:id==='@/lib/hybrid-station'?{songKey:t=>t.id}:require(id));
 const render=liked=>renderToStaticMarkup(React.createElement(m.exports.LikedSongs,{liked,onExplore:()=>{},onRemove:()=>{}}));
 const empty=render([]);assert.ok(empty.includes('No liked songs yet'));assert.ok(empty.includes('cannot be created without likes'));
 const populated=render([{id:'fixture',title:'Song <test>',artist:'Artist',album:'Album'}]);
