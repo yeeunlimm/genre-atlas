@@ -29,7 +29,7 @@ export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:Stat
   return <section className={styles.sleeve} id="liked-songs" aria-label="Liked songs">
     <header className={styles.header}><span>YOUR PERSONAL PRESSING / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
     <div className={styles.stage}>
-      <div className={styles.record} aria-hidden="true"><div className={styles.label}><span>GENRE ATLAS</span><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>
+      <div className={styles.record} aria-hidden="true"><div className={styles.label}><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>
       <div className={styles.covers} role="group" aria-label="Liked songs around the record">
         {liked.map((track,index)=>{const key=songKey(track),p=vinylPosition(index,liked.length);
           return <button key={key} type="button" className={styles.cover} style={{left:p.x+'%',top:p.y+'%','--tilt':p.tilt+'deg','--dx':p.dx+'px','--dy':p.dy+'px'} as CSSProperties} data-active={!!active&&songKey(active)===key} aria-label={`${index+1}. ${track.title} — ${track.artist}`} aria-pressed={selected===key} aria-controls="liked-song-detail" onMouseEnter={()=>setHovered(key)} onMouseLeave={()=>setHovered(null)} onFocus={()=>setSelected(key)} onClick={()=>setSelected(key)} onKeyDown={e=>{if(e.key==='Escape'){setSelected(null);setHovered(null);}}}>

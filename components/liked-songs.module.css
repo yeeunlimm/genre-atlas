@@ -21,7 +21,7 @@
 .actions>a:hover,.actions>button:hover{background:#ffffff12}
 .actions :focus-visible{outline-color:#ddd}
 .footer{color:#999;border-color:#ffffff26;padding-top:10px}
-.label{overflow:hidden;container-type:inline-size}
+.label{overflow:hidden;container-type:inline-size;padding-bottom:6px}
 .label>span{font-size:6px;letter-spacing:.06em;margin-top:5%;flex-shrink:0}
 .label>i{width:6px;height:6px;margin:3px 0;flex-shrink:0}
 .labelCopy{width:72%;height:55%;flex-shrink:0;overflow:hidden;overflow-wrap:anywhere;text-align:center;line-height:1.12}
