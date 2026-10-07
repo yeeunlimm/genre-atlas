@@ -77,17 +77,23 @@ console.log('PASS seed-pair features, missingness, provenance, frozen X/Y, numer
 
 // Test the route without ever installing a synthetic model in the live work path.
 async function testEndpoint(){
-  let data={...artifact,privateTrainingRows:['must never reach browser']},size=100;
-  const api={exports:{}};
-  new Function('exports','require','module',ts.transpileModule(fs.readFileSync('app/api/station/ranking/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(api.exports,p=>p==='@/lib/catboost-seed-ranker'?r:p==='node:fs/promises'?{stat:async()=>({size}),readFile:async()=>JSON.stringify(data)}:require(p),api);
+  const data={...artifact,privateTrainingRows:['must never reach browser']};
+  function endpoint(model){const api={exports:{}};
+  new Function('exports','require','module',ts.transpileModule(fs.readFileSync('app/api/station/ranking/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText)(api.exports,p=>p==='@/lib/catboost-seed-ranker'?r:p==='@/models/station-ranker.json'?model:require(p),api);return api;}
+  const api=endpoint(data);
   let response=await api.exports.GET(),body=await response.json();
   assert.equal(body.status,'ready');
   assert.equal(body.artifact.privateTrainingRows,undefined);
   assert.equal(response.headers.get('cache-control'),'no-store');
-  data={...artifact,approved:false};
-  assert.equal((await(await api.exports.GET()).json()).status,'unavailable');
-  size=2000001;data=artifact;
-  assert.equal((await(await api.exports.GET()).json()).status,'unavailable');
-  console.log('PASS ranking endpoint approval, response sanitization and bounded model loading (in-memory fixtures only).');
+  assert.equal(body.deploymentMode,'experimental');
+  assert.equal(body.qualityImprovementVerified,false);
+  assert.equal((await(await endpoint({...artifact,approved:false}).exports.GET()).json()).status,'unavailable');
+  assert.equal((await(await endpoint({...artifact,trees:Array(1001).fill(artifact.trees[0])}).exports.GET()).json()).status,'unavailable');
+  const deployed=JSON.parse(fs.readFileSync('models/station-ranker.json','utf8'));
+  assert.ok(r.readRankerArtifact(deployed));
+  assert.equal(deployed.trees.length,98);
+  assert.equal((await(await endpoint(deployed).exports.GET()).json()).artifact.modelId,deployed.modelId);
+  assert.deepEqual(Object.keys(deployed).sort(),Object.keys(r.readRankerArtifact(deployed)).sort(),'no training rows or identifiers in deployed artifact');
+  console.log('PASS experimental deployment, approval, sanitization, tree bounds and real 98-tree model.');
 }
 testEndpoint().catch(error=>{console.error(error);process.exitCode=1;});
