@@ -1,0 +1,18 @@
+import {mergeCandidates,rankCandidates,songKey,type Candidate,type Memory} from './hybrid-station';
+import {positiveReviewCandidates,type ReviewSummary} from './review-sentiment';
+import type {StationTrack} from './station-catalog';
+export const reviewKey=(track:{artist:string;title:string})=>JSON.stringify([track.artist.normalize('NFKC').toLowerCase().trim(),track.title.normalize('NFKC').toLowerCase().trim()]);
+
+// No station queue/current song is accepted by this API.
+export async function collectLikedCandidates(liked:StationTrack[],lookup:(seed:StationTrack,route:'related-artists'|'similar-tracks'|'credits')=>Promise<Candidate[]>,signal:AbortSignal){
+  const seeds=liked.slice(0,5),jobs=seeds.flatMap(seed=>(['related-artists','similar-tracks','credits'] as const).map(route=>({seed,route})));
+  const rows:Candidate[]=[];let cursor=0,failed=0;
+  await Promise.all([0,1].map(async()=>{while(cursor<jobs.length){signal.throwIfAborted();const job=jobs[cursor++];try{rows.push(...await lookup(job.seed,job.route));}catch(e){signal.throwIfAborted();failed++;}}}));
+  return {rows:mergeCandidates(rows),failed,total:jobs.length};
+}
+export function selectLikedPlaylist(rows:Candidate[],liked:StationTrack[],memory:Memory,recent:Record<string,number>,reviews:Map<string,ReviewSummary>,now=Date.now(),score?:(row:Candidate)=>number){
+  // The gate utility caps final lists at 10, so filter individually before ranking
+  // and artist diversity; otherwise an ineligible top track could hide a good one.
+  const filtered=rows.filter(row=>positiveReviewCandidates([{trackId:reviewKey(row.track)}],reviews,now).length>0);
+  return rankCandidates(filtered,liked,{...memory,recent},[],now,score).filter(row=>!liked.some(t=>songKey(t)===songKey(row.track))).slice(0,10);
+}
