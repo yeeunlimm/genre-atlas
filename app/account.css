@@ -6,3 +6,4 @@
 .account-error{font-size:14px;color:#ffb7b7;line-height:1.5}
 .account-page{max-width:660px;margin:12vh auto;padding:24px;line-height:1.7}
 .account-page h1{font-size:28px;margin:24px 0 12px}
+@media(max-width:640px){.topbar{height:auto;min-height:76px;flex-wrap:wrap;gap:16px;padding:18px 20px}.topbar .station-nav{flex-wrap:wrap;gap:12px}.topbar .account-button{white-space:nowrap}}
