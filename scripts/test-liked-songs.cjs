@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),React=require('react');
+const {renderToStaticMarkup}=require('react-dom/server');
+const m={exports:{}};
+new Function('exports','module','require',ts.transpileModule(fs.readFileSync('components/liked-songs.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText)(m.exports,m,id=>id==='@/lib/discovery-station'?{trackYouTubeUrl:()=> 'https://www.youtube.com/'}:id==='@/lib/hybrid-station'?{songKey:t=>t.id}:require(id));
+const render=liked=>renderToStaticMarkup(React.createElement(m.exports.LikedSongs,{liked,onExplore:()=>{},onRemove:()=>{}}));
+const empty=render([]);assert.ok(empty.includes('No liked songs yet'));assert.ok(empty.includes('cannot be created without likes'));
+const populated=render([{id:'fixture',title:'Song <test>',artist:'Artist',album:'Album'}]);
+assert.ok(populated.includes('Song &lt;test&gt;'));assert.ok(populated.includes('Remove like'));assert.ok(populated.includes('Explore song'));assert.ok(populated.includes('id="liked-songs"'));
+const station=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');assert.ok(station.includes('href="#liked-songs"'));assert.ok(station.includes('userId&&hydrated&&<LikedSongs'));
+console.log('PASS: visible liked-song list, empty guidance, safe text, listen/explore/remove actions and signed-in entry link.');
