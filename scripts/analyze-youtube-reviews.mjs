@@ -9,7 +9,7 @@ async function load(file) {
   return module.exports;
 }
 const {summarizeReviews}=await load('../lib/review-sentiment.ts');
-const {youtubeReviewComments}=await load('../lib/youtube-review-comments.ts');
+const {youtubeReviewComments,assertYouTubeAnalysisApproved}=await load('../lib/youtube-review-comments.ts');
 const [videoId,title,artist]=process.argv.slice(2);
 if (!/^[\w-]{11}$/.test(videoId||'') || !title || !artist || !process.env.YOUTUBE_API_KEY) {
   console.error('Set server-only YOUTUBE_API_KEY; run: node scripts/analyze-youtube-reviews.mjs VERIFIED_VIDEO_ID "TITLE" "ARTIST"');
@@ -17,6 +17,7 @@ if (!/^[\w-]{11}$/.test(videoId||'') || !title || !artist || !process.env.YOUTUB
 }
 const started=performance.now();
 try {
+  assertYouTubeAnalysisApproved();
   // Sanity tests use authored text, not claimed ground-truth music evaluation.
   const sanityPositive=await sentiment('I love this song. The melody is beautiful.');
   const sanityNegative=await sentiment('I hate this song. The vocals are terrible.');

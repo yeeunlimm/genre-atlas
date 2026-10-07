@@ -2,6 +2,16 @@ import {mergeCandidates,rankCandidates,songKey,type Candidate,type Memory} from 
 import {positiveReviewCandidates,type ReviewSummary} from './review-sentiment';
 import type {StationTrack} from './station-catalog';
 export const reviewKey=(track:{artist:string;title:string})=>JSON.stringify([track.artist.normalize('NFKC').toLowerCase().trim(),track.title.normalize('NFKC').toLowerCase().trim()]);
+export const PLAYLIST_CANDIDATE_LIMIT=20;
+export const PLAYLIST_TRACK_LIMIT=10;
+
+// Rank from likes FIRST. Only this fixed shortlist is eligible for comment analysis.
+// Filtering dislikes, repeats, liked recordings/albums and artist duplicates here
+// avoids spending comment requests on songs that cannot enter the final playlist.
+export function shortlistLikedCandidates(rows:Candidate[],liked:StationTrack[],memory:Memory,recent:Record<string,number>,now=Date.now(),score?:(row:Candidate)=>number){
+  if(!liked.length)return [];
+  return rankCandidates(rows,liked,{...memory,recent},[],now,score).slice(0,PLAYLIST_CANDIDATE_LIMIT);
+}
 
 // No station queue/current song is accepted by this API.
 export async function collectLikedCandidates(liked:StationTrack[],lookup:(seed:StationTrack,route:'related-artists'|'similar-tracks'|'credits')=>Promise<Candidate[]>,signal:AbortSignal){

@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const cache=new Map();
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const m={exports:{}};cache.set(file,m.exports);new Function('exports','module','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,m,id=>id.startsWith('.')?load(path.resolve(path.dirname(file),id+'.ts')):require(id));return m.exports;}
-const {collectLikedCandidates,selectLikedPlaylist,reviewKey}=load('lib/liked-playlist.ts');
+const {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey}=load('lib/liked-playlist.ts');
 const {blankMemory,songKey}=load('lib/hybrid-station.ts');
 const {stationCatalog}=load('lib/station-catalog.ts');
 const seed=stationCatalog[0];
@@ -25,7 +25,18 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.equal(calls,3);assert.equal(result.failed,1);assert.equal(result.rows.length,1);
  const aborted=new AbortController();aborted.abort();await assert.rejects(collectLikedCandidates([seed],async()=>[],aborted.signal));
  const component=fs.readFileSync('components/liked-playlist.tsx','utf8');
- assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json('/api/station/reviews')"));
+ assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews')"));
+ assert.ok(component.indexOf('setShortlist(candidates)')<component.indexOf("await json<ReviewAvailability>('/api/station/reviews')"));
+ const pool=Array.from({length:40},(_,i)=>row('pool'+i,'artist'+i,.99-i*.01));
+ const shortlist=shortlistLikedCandidates(pool,[seed],blankMemory(),{},now);
+ assert.equal(shortlist.length,20);assert.deepEqual(shortlist.map(r=>r.track.id),pool.slice(0,20).map(r=>r.track.id));
+ assert.deepEqual(shortlistLikedCandidates(pool,[],blankMemory(),{},now),[]);
+ const sentiment=new Map(pool.map((r,i)=>[reviewKey(r.track),summary(i<6?-.3:.3)]));
+ const ten=selectLikedPlaylist(shortlist,[seed],blankMemory(),{},sentiment,now);
+ assert.equal(ten.length,10);assert.ok(ten.every(r=>shortlist.some(s=>s.track.id===r.track.id)));assert.equal(ten[0].track.id,'pool6');
+ const onlyThree=new Map(shortlist.slice(0,3).map(r=>[reviewKey(r.track),summary(.2)]));
+ assert.equal(selectLikedPlaylist(shortlist,[seed],blankMemory(),{},onlyThree,now).length,3);
+ assert.ok(!shortlistLikedCandidates([row('disliked'),...pool],[seed],memory,{},now).some(r=>r.track.id==='disliked'));
  const station=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');assert.ok(!station.includes('function buildPlaylist'));assert.ok(station.includes('userId&&hydrated&&<LikedPlaylist'));
  assert.ok(!station.includes('/api/station/reviews'));
  for(const file of ['lib/hybrid-station.ts','lib/discovery-station.ts','lib/hybrid-sources.ts'])assert.ok(!/review-sentiment|review-analyzer|positiveReviewCandidates/.test(fs.readFileSync(file,'utf8')));
