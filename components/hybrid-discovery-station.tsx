@@ -6,14 +6,14 @@ import {stationCatalog,type StationTrack} from "@/lib/station-catalog";
 import {recommend,trackYouTubeUrl} from "@/lib/discovery-station";
 import {appendExposure,emptyLearning,exportLearning,learningKey,makeExposure,rateExposure,readLearning,trainRanker,type LearningData} from "@/lib/station-learning";
 import {selectedSongRows,selectedSongMemory} from '@/lib/selected-song-discovery';
-import {blankMemory,cleanMemory,excluded,mergeCandidates,MEMORY_KEY,recordVote,remember,routeLabels,routeWeights,routes,songKey,type Candidate,type Memory,type Route} from "@/lib/hybrid-station";
+import {blankMemory,cleanMemory,excluded,mergeCandidates,MEMORY_KEY,recordVote,remember,routeLabels,routeWeights,songKey,type Candidate,type Memory} from "@/lib/hybrid-station";
 import {rankSongCandidates} from '@/lib/catboost-seed-ranker';
 import {useSeedRanker} from './use-seed-ranker';
 import type {LiveStationResult} from "@/lib/live-station";
 import type {SourceResult} from "@/lib/hybrid-sources";
 import {StationArtwork} from "./station-artwork";
 import {addLiked,emptyProfile,profileKey,readProfile,stationSeeds} from "@/lib/station-profile";
-import {attemptKey,emptyStationMessage,jobKey,recoveryJobs,type Job,type Progress} from "@/lib/station-recovery";
+import {attemptKey,emptyStationMessage,initialSongJobs,jobKey,songDiscoveryJobs,type Job,type Progress} from "@/lib/station-recovery";
 import {mergeSearch} from "@/lib/catalog-search";
 import {accountFetch} from "@/lib/supabase/browser";
 import {AccountButton,useAccount} from "./account-provider";
@@ -84,19 +84,20 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
   const shown=current&&!liked.some(t=>songKey(t)===songKey(current.track))?(discoveryRows.find(r=>songKey(r.track)===songKey(current.track))||current):undefined;
   const queue=useMemo(()=>rankSongCandidates(discoveryRows,seeds,discoveryMemory,current?[...consumed,current.track]:consumed,seedRanker.model),[discoveryRows,seeds,discoveryMemory,current,consumed,seedRanker.model]);
   const weights=routeWeights(discoveryMemory),loading=Object.values(progress).some(p=>p.state==="loading");
-  const plan=recoveryJobs(Object.values(progress),autoAttempts.current);
+  const plan=songDiscoveryJobs(discoveryRows,seeds,Object.values(progress),autoAttempts.current);
   const finding=loading||recoveryBusy||(!current&&!ranked.length&&plan.length>0);
+  const relatedFallback=Object.values(progress).some(p=>p.route==='related-artists')||plan.some(p=>p.route==='related-artists');
   const emptyMessage=emptyStationMessage(discoveryRows,seeds,discoveryMemory,consumed,Object.values(progress));
   useEffect(()=>{
     const c=stationRequest.current;
     if(!hydrated||current||ranked.length||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
-    const jobs=recoveryJobs(Object.values(progress),autoAttempts.current);if(!jobs.length)return;
+    const jobs=songDiscoveryJobs(discoveryRows,seeds,Object.values(progress),autoAttempts.current);if(!jobs.length)return;
     for(const job of jobs)autoAttempts.current.add(attemptKey(job));
     void recover(jobs,c);
-  },[hydrated,current,ranked,seeds,progress,loading,recoveryBusy]);
+  },[hydrated,current,ranked,discoveryRows,seeds,progress,loading,recoveryBusy]);
   async function recover(jobs:Job[],controller:AbortController){
     if(recoveryLock.current||controller.signal.aborted)return;
-    recoveryLock.current=true;setRecoveryBusy(true);setNotice("Looking further across your discovery sources…");
+    recoveryLock.current=true;setRecoveryBusy(true);setNotice(jobs.some(job=>job.route==='related-artists')?"No connected candidates remain. Checking songs by related artists…":"Checking more documented credit and sample connections…");
     try{let index=0;await Promise.all([0,1].map(async()=>{while(index<jobs.length&&!controller.signal.aborted)await runJob(jobs[index++],controller.signal);}));}
     finally{if(stationRequest.current===controller){recoveryLock.current=false;setRecoveryBusy(false);setNotice("");}}
   }
@@ -148,9 +149,8 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
     setOrigin(track);setSeeds(tracks);setCurrent(undefined);setConsumed([]);
     const starter=tracks.flatMap(t=>asCredits(t,recommend(t.id,stationCatalog)));
     setRows(mergeCandidates(starter));
-    setNotice("Finding songs connected to your selected song…");
-    const order:Route[]=["related-artists","similar-tracks","credits"];
-    const jobs=order.flatMap(route=>tracks.map(seed=>({seed,route,offset:0})));
+    setNotice("Finding documented credit and sample connections…");
+    const jobs=initialSongJobs(tracks);
     setProgress(Object.fromEntries(jobs.map(j=>[jobKey(j),{...j,state:"loading",count:0,note:"Queued…",nextOffset:null}])));
     let index=0;await Promise.all([0,1].map(async()=>{while(index<jobs.length&&!controller.signal.aborted)await runJob(jobs[index++],controller.signal);}));
     if(!controller.signal.aborted)setNotice("");
@@ -202,7 +202,8 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
       {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Other catalog versions</button>}
       </details>}
       <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Recommendations are based only on your selected song.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
-      {finding&&<p className="station-meta" role="status">Checking live catalogs and credits independently. Available recommendations appear as soon as they arrive.</p>}
+      {finding&&<p className="station-meta" role="status">{relatedFallback?"No connected candidates remain after the credit lookup. Checking related artists as a fallback; album, dislike and repeat limits still apply.":"Checking documented credit and sample connections first. Related artists are checked only when this lookup finishes without connected candidates."}</p>}
+      {shown&&relatedFallback&&!shown.paths.some(p=>p.route==='credits')&&<p className="station-meta">Related-artist fallback · a song by a related artist, not a confirmed shared-production connection.</p>}
       {shown&&stationCatalog.some(t=>t.id===shown.track.id)&&<p className="station-meta">Source-checked starter collection · this connection was stored in advance, not found by a live lookup.</p>}
     </div>
     <div className="station-layout"><aside className="station-picker">
@@ -221,10 +222,10 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
         <details className="station-evidence"><summary>Why this track?</summary><ul>{shown.reasons.map((reason,i)=><li key={i}><b>{reason.label}</b><span>{reason.detail}</span></li>)}</ul><div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div><small>Connections are discovery signals, not a guarantee of the same sound. {rankingNote} Model changes apply to upcoming songs; the visible song stays in place.</small></details>
       </article><details className="station-upnext"><summary>Up next · {queue.length}</summary>{queue.slice(0,4).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{routeLabels[row.paths[0].route]}</span></div>)}</details></>:<div className="station-empty" role="status"><Radio size={42} strokeWidth={1}/><h3>{!seeds.length?"It starts with one song.":finding?"Finding your next discovery…":emptyMessage.title}</h3><p>{!seeds.length?"Search a song and select it. No playlist to prepare.":finding?"We’re checking more candidates before calling this mix finished. Your album and artist limits stay in place.":emptyMessage.detail}</p>{seeds.length>0&&!finding&&(emptyMessage.failed||emptyMessage.more)&&<button onClick={retrySources}>{emptyMessage.failed?"Retry unavailable sources":"Find more songs"}</button>}</div>}
       <details className="station-learning"><summary><span className="learning-status">{seedRanker.model?'RANKING / CREDITS 80% + CATBOOST 20%':'CATBOOST / COLLECTING TRAINING DATA'}</span>Saved ratings · {model.labels}</summary><p role="status">{rankingNote}</p><p>General discovery compares each candidate with your selected song. Artist names and saved-like artist matches are not model inputs. The old browser preference model is not used for this ranking.</p><p>{model.positives} likes · {model.negatives} dislikes across all saved records. {learning.events.filter(e=>e.seedPair?.trainable&&e.label!==null).length} ratings have the new seed-pair snapshots; older rows are not converted into new training data.</p><p>Feature snapshots are frozen before feedback. Unknown metadata is -1, not a fabricated zero. Skips and unanswered suggestions have no training label. Retraining is a separate offline step, not automatic after every like.</p><button disabled={!learning.events.length} onClick={exportTraining}>Export my training records</button><p>The download contains local song identifiers, feature snapshots and your ratings. It does not contain your sign-in ID. Nothing is uploaded by this button.</p></details>
-      {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & ranking</summary><p className="station-meta">Selected song only. {rankingNote} Source multipliers below belong to the fallback ranking, not the 80:20 blend.</p><div className="station-weights">{routes.map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
+      {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & ranking</summary><p className="station-meta">Credits & samples first. Related artists are a no-connections fallback only. {rankingNote} Source multipliers below belong to the fallback ranking, not the 80:20 blend.</p><div className="station-weights">{[...new Set(Object.values(progress).map(p=>p.route))].map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
     </div></div>
     <footer className="station-foot"><span>{storageNote||"Preferences stay in this browser. Likes are separated by sign-in; they do not sync between devices."}</span><button disabled={!hydrated||liking} onClick={reset}><RotateCcw size={15}/>Reset saved preferences</button></footer>
-    <details className="station-method"><summary>How this station works</summary><p>Select one song to start. General discovery collects candidates from that song only. {rankingNote} Already liked songs are excluded across catalogs by artist and title; saved likes do not add artists, creators or albums to the search. Likes can be removed without changing past ratings. Search checks Deezer and Apple in parallel; MusicBrainz provides additional recordings. Related artists and their songs come from Deezer, with YouTube Music and other catalogs as fallbacks. Credits come from MusicBrainz and available Apple song pages. The source-checked starter collection is stored in advance and labelled separately. Last.fm is off without an API key. No YouTube playlist collection, Spotify, BPM scoring or audio analysis is used. Shared credits are not required to collect a candidate, but are strongly preferred by the 80:20 ranking when an approved model is available. The selected song's album, disliked songs, repeated artists and songs shown in the last three days are excluded. The separate 10-track playlist uses likes and requires available positive-comment analysis; its ranking was not changed by this feature. No provider guarantees every recording. Preferences and training records stay in this browser, separately for each signed-in user; sign-in does not enable cross-device storage.</p></details>
+    <details className="station-method"><summary>How this station works</summary><p>Select one song to start. General discovery collects documented credit and sample connections first, from that song only. Related artists are queried only when the credit lookup finishes without connected candidates; source errors and recent-only or other filter exhaustion do not trigger this fallback. {rankingNote} Already liked songs are excluded across catalogs by artist and title; saved likes do not add artists, creators or albums to the search. Likes can be removed without changing past ratings. Search checks Deezer and Apple in parallel; MusicBrainz provides additional recordings. Fallback related artists and their songs come from Deezer, with YouTube Music and other catalogs as fallbacks. These are artist-level suggestions, not confirmed shared-production or sound-similarity matches. Credits come from MusicBrainz and available Apple song pages. The source-checked starter collection is stored in advance and labelled separately. General discovery does not query Last.fm or collect YouTube playlists. No Spotify, BPM scoring or audio analysis is used. The selected song's album, disliked songs, repeated artists and songs shown in the last three days are excluded. The separate 10-track playlist uses likes and requires available positive-comment analysis; its ranking was not changed by this feature. No provider guarantees every recording. Preferences and training records stay in this browser, separately for each signed-in user; sign-in does not enable cross-device storage.</p></details>
   </section>
   <div className="station personal-playlist-tools" hidden={!account.userId}>
       {playlistTarget&&account.userId&&(!hydrated||userId!==account.userId)&&createPortal(<div className="playlist-load-status" role="status"><p>{authError||"Loading your playlist…"}</p>{authError&&<button className="secondary" onClick={()=>void loadIdentity()}>Retry playlist</button>}</div>,playlistTarget)}

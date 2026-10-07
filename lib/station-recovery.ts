@@ -15,6 +15,27 @@ export function recoveryJobs(progress:Progress[],attempted:Set<string>):Job[]{
   const retries=progress.filter(p=>p.state==="partial"||p.state==="error");
   return [...more,...retries].filter((p,i,a)=>!attempted.has(attemptKey(p))&&a.findIndex(x=>jobKey(x)===jobKey(p))===i).slice(0,Math.min(2,AUTO_REQUEST_LIMIT-attempted.size));
 }
+// General song discovery starts from documented credits/samples only. The liked
+// playlist has its own collector and must not inherit this single-seed policy.
+export function initialSongJobs(seeds:StationTrack[]):Job[]{
+  return seeds.map(seed=>({seed,route:'credits',offset:0}));
+}
+export function songDiscoveryJobs(rows:Candidate[],seeds:StationTrack[],progress:Progress[],attempted:Set<string>):Job[]{
+  if(seeds.length!==1||progress.some(p=>p.state==='loading'))return [];
+  const recovery=recoveryJobs(progress,attempted);
+  if(recovery.length)return recovery;
+  // This is the no-connections condition, NOT any empty ranked queue. A failed
+  // source, disliked/consumed candidates or recent-only exclusions must not open
+  // an unrelated route. Already-liked songs have been removed from rows upstream.
+  if(rows.length||progress.some(p=>p.state==='error'||p.state==='partial'))return [];
+  const seed=seeds[0],credit=progress.find(p=>p.seed.id===seed.id&&p.route==='credits');
+  const related={seed,route:'related-artists' as const,offset:0};
+  if(!credit||!['ready','empty'].includes(credit.state)||
+    progress.some(p=>p.seed.id===seed.id&&p.route==='related-artists')||attempted.has(attemptKey(related)))return [];
+  // Like the first credits request, this route's first lookup is allowed once,
+  // even if the bounded recovery budget was consumed by credit pagination.
+  return [related];
+}
 export function emptyStationMessage(rows:Candidate[],seeds:StationTrack[],memory:Memory,consumed:StationTrack[],progress:Progress[]){
   const failed=progress.some(p=>p.state==="error"||p.state==="partial");
   const more=progress.some(p=>p.nextOffset!==null);

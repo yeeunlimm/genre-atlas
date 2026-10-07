@@ -1,0 +1,64 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const modules={};
+function load(name){if(modules[name])return modules[name];const m={exports:{}};new Function('exports','require','module',ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,p=>p.startsWith('./')?load(p.slice(2)):require(p),m);return modules[name]=m.exports;}
+const h=load('hybrid-station'),r=load('station-recovery'),policy=load('selected-song-discovery'),ranker=load('catboost-seed-ranker'),f=load('seed-pair-features');
+const source={label:'Synthetic test only',url:'https://musicbrainz.org/recording/fixture'};
+const track=id=>({id,recordingId:id,artistId:id+'-artist',title:id,artist:id+' Artist',album:id+' Album',albumFamily:id+'-album',credits:[],genres:[],source,checkedAt:'2026-10-07'});
+const seed=track('seed'),fresh=track('fresh');
+const row=t=>({track:t,score:0,reasons:[],feedbackBoost:false,paths:[{route:'credits',seedId:seed.id,confidence:.76}]});
+const progress=(state='empty',extra={})=>({seed,route:'credits',offset:0,nextOffset:null,state,count:0,note:'',...extra});
+const plan=(rows=[],status=[progress()],attempted=new Set())=>r.songDiscoveryJobs(rows,[seed],status,attempted);
+const related={seed,route:'related-artists',offset:0};
+assert.deepEqual(r.initialSongJobs([seed]),[{seed,route:'credits',offset:0}]);
+assert.deepEqual(r.initialSongJobs([]),[]);
+assert.deepEqual(plan([],[]),[],'no fallback before the primary lookup');
+assert.deepEqual(plan([],[progress('loading')]),[],'wait for completion');
+assert.deepEqual(plan([],[progress('disabled')]),[],'disabled is not a successful lookup');
+assert.deepEqual(plan(),[related],'completed zero candidates starts only related artists');
+assert.deepEqual(plan([],[progress('ready')]),[related],'ready response with zero usable credit rows also falls back');
+assert.deepEqual(plan([row(fresh)]),[],'no extra lookup with connected candidates');
+assert.deepEqual(plan([],[progress('error')]).map(j=>j.route),['credits'],'retry primary error, never related artists');
+assert.deepEqual(plan([],[progress('error')],new Set([r.attemptKey(progress())])),[],'permanent error stays an error');
+assert.deepEqual(plan([],[progress('partial')],new Set([r.attemptKey(progress())])),[],'incomplete lookup is not no connections');
+assert.deepEqual(plan([],[progress('empty',{nextOffset:6})]).map(j=>[j.route,j.offset]),[['credits',6]],'finish primary pagination first');
+const finished=[progress(),progress('empty',{route:'related-artists'})];
+assert.deepEqual(plan([],finished),[],'do not restart an empty fallback');
+assert.deepEqual(plan([],[progress(),progress('loading',{route:'related-artists'})]),[],'no duplicate in-flight fallback');
+assert.deepEqual(plan([],[progress()],new Set([r.attemptKey(related)])),[],'scheduling is idempotent before progress is rendered');
+assert.deepEqual(plan([],[progress(),progress('empty',{route:'related-artists',nextOffset:6})]).map(j=>[j.route,j.offset]),[['related-artists',6]],'fallback has bounded recovery too');
+const exhausted=new Set(Array.from({length:r.AUTO_REQUEST_LIMIT},(_,i)=>String(i)));
+assert.deepEqual(plan([],[progress()],exhausted),[related],'reserve one initial fallback even after credit recovery budget');
+assert.deepEqual(plan([],finished,exhausted),[],'budget cannot cause an infinite restart');
+assert.deepEqual(r.songDiscoveryJobs([],[],[progress()],new Set()),[],'reset cannot schedule a stale job');
+assert.deepEqual(r.songDiscoveryJobs([],[seed,fresh],[progress()],new Set()),[],'do not change the multi-like playlist');
+const candidate=row(fresh),mem=h.blankMemory();
+for(const memory of [h.remember(mem,fresh),h.recordVote(mem,candidate,'dislike')]){
+  assert.equal(h.rankCandidates([candidate],[seed],memory).length,0);
+  assert.deepEqual(plan([candidate]),[],'an empty ranked queue does not mean zero collected candidates');
+}
+assert.equal(h.rankCandidates([candidate],[seed],mem,[fresh]).length,0);
+assert.deepEqual(plan([candidate]),[],'consumed artists do not trigger fallback');
+assert.deepEqual(plan([row({...fresh,albumFamily:seed.albumFamily})]),[],'album-filter exhaustion does not trigger fallback');
+assert.deepEqual(plan(policy.selectedSongRows([candidate],[fresh])),[related],'existing no-connections state after liked exclusion remains eligible');
+
+// Synthetic tree exercises real scoring, not a trained or deployable artifact.
+const a=row({...track('a'),credits:[{person:'p',name:'P',role:'producer',source}]}),b=row(track('b'));
+const enriched={...seed,credits:[{person:'p',name:'P',role:'producer',source}]};
+const model=ranker.readRankerArtifact({format:'genre-atlas-seed-catboost',version:1,modelId:'test-only',approved:true,featureVersion:1,featureNames:[...f.PAIR_FEATURE_NAMES],normalization:{low:0,high:1},scale:1,bias:0,trees:[{splits:[{feature:0,border:.5}],leaves:[1,0]}]});
+assert.ok(model);
+assert.deepEqual(ranker.rankSongCandidates([a,b],[enriched],mem).map(r=>r.track.id),['a','b'],'no model keeps original order');
+assert.deepEqual(ranker.rankSongCandidates([a,b],[enriched],mem,[],model).map(r=>r.track.id),['b','a'],'approved numeric tree reorders credit candidates');
+const fallback=[a,b].map(x=>({...x,paths:[{route:'related-artists',seedId:seed.id,confidence:.8}]}));
+assert.deepEqual(ranker.rankSongCandidates(fallback,[enriched],mem,[],model).map(r=>r.track.id),['b','a'],'ML can reorder fallback candidates without inventing credit scores');
+assert.deepEqual(ranker.rankSongCandidates([], [seed],mem,[],model),[],'the model never invents candidates');
+const filtered=ranker.rankSongCandidates(fallback,[enriched],h.recordVote(mem,b,'dislike'),[],model);
+assert.deepEqual(filtered.map(r=>r.track.id),['a'],'fallback and ML still respect exclusions');
+const component=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');
+assert.ok(component.includes('const jobs=initialSongJobs(tracks)'));
+assert.equal((component.match(/songDiscoveryJobs\(discoveryRows,seeds/g)||[]).length,2,'same policy drives loading and execution');
+assert.ok(!component.includes('const order:Route[]'));
+assert.ok(component.includes('Related-artist fallback'));
+assert.ok(component.includes('CatBoost is not active: no approved model'));
+assert.ok(component.includes('if(signal.aborted)return;'));
+assert.ok(component.includes('stationRequest.current?.abort()'));
+console.log('PASS credit-first collection, exact no-connections fallback, bounded retries, loading/error/filter exclusions, cancelled/reset sessions, and optional CatBoost descending order (synthetic model only).');
