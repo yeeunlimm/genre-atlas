@@ -6,8 +6,8 @@ import {findReviewVideo} from './youtube-review-match';
 import type {ReviewTrack,TrackReview,ReviewAvailability} from './playlist-review-types';
 
 export function reviewAvailability(config:NodeJS.ProcessEnv=process.env):ReviewAvailability{
-  if(config.YOUTUBE_DERIVED_METRICS_APPROVED!=='true')return {ready:false,reason:'Your candidates are ready. YouTube comment analysis is paused until the site owner confirms the required analytics terms. No songs have passed the filter yet.'};
-  if(!config.YOUTUBE_API_KEY)return {ready:false,reason:'Your candidates are ready, but the server YouTube key is not configured. No songs have been analysed.'};
+  if(config.YOUTUBE_DERIVED_METRICS_APPROVED!=='true')return {ready:false,reason:'Playlist creation is paused: YouTube comment analysis requires provider approval and acceptance of the applicable analytics terms. No playlist was created; your likes are unchanged.'};
+  if(!config.YOUTUBE_API_KEY?.trim())return {ready:false,reason:'Playlist creation is paused: the server YouTube key is not configured. No songs were analysed; your likes are unchanged.'};
   return {ready:true};
 }
 

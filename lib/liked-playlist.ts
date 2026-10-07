@@ -2,7 +2,7 @@ import {mergeCandidates,rankCandidates,songKey,type Candidate,type Memory} from 
 import {positiveReviewCandidates,type ReviewSummary} from './review-sentiment';
 import type {StationTrack} from './station-catalog';
 export const reviewKey=(track:{artist:string;title:string})=>JSON.stringify([track.artist.normalize('NFKC').toLowerCase().trim(),track.title.normalize('NFKC').toLowerCase().trim()]);
-export const PLAYLIST_CANDIDATE_LIMIT=20;
+export const PLAYLIST_CANDIDATE_LIMIT=30;
 export const PLAYLIST_TRACK_LIMIT=10;
 
 // Rank from likes FIRST. Only this fixed shortlist is eligible for comment analysis.
@@ -26,5 +26,5 @@ export function selectLikedPlaylist(rows:Candidate[],liked:StationTrack[],memory
   // The gate utility caps final lists at 10, so filter individually before ranking
   // and artist diversity; otherwise an ineligible top track could hide a good one.
   const filtered=rows.filter(row=>positiveReviewCandidates([{trackId:reviewKey(row.track)}],reviews,now).length>0);
-  return rankCandidates(filtered,liked,{...memory,recent},[],now,score).filter(row=>!liked.some(t=>songKey(t)===songKey(row.track))).slice(0,10);
+  return rankCandidates(filtered,liked,{...memory,recent},[],now,score).filter(row=>!liked.some(t=>songKey(t)===songKey(row.track))).slice(0,PLAYLIST_TRACK_LIMIT);
 }

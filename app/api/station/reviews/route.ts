@@ -1,5 +1,5 @@
 import {verifiedAccount} from '@/lib/supabase/server';
-import {reviewKey,PLAYLIST_CANDIDATE_LIMIT} from '@/lib/liked-playlist';
+import {reviewKey,PLAYLIST_CANDIDATE_LIMIT,PLAYLIST_TRACK_LIMIT} from '@/lib/liked-playlist';
 import {reviewAvailability,analyzePlaylistTrack} from '@/lib/playlist-review-service';
 import {playlistReviewStream} from '@/lib/playlist-review-stream';
 import type {ReviewTrack} from '@/lib/playlist-review-types';
@@ -13,7 +13,7 @@ const recent=new Map<string,number>();
 export async function GET(request:Request){
   try{
     if(!await verifiedAccount(request))return Response.json({error:'Sign in to create your personal playlist.'},{status:401,headers});
-    return Response.json({...reviewAvailability(),experimental:true,candidateLimit:20,playlistLimit:10},{headers});
+    return Response.json({...reviewAvailability(),experimental:true,candidateLimit:PLAYLIST_CANDIDATE_LIMIT,playlistLimit:PLAYLIST_TRACK_LIMIT},{headers});
   }catch{return Response.json({error:'Account verification is unavailable. Try again later.'},{status:503,headers});}
 }
 function validTrack(track:unknown):track is ReviewTrack{
@@ -32,7 +32,7 @@ export async function POST(request:Request){
     const raw=await request.text();
     if(raw.length>30000)return Response.json({error:'Too many candidates.'},{status:413,headers});
     let body;try{body=JSON.parse(raw);}catch{return Response.json({error:'Invalid request.'},{status:400,headers});}
-    if(!Array.isArray(body?.tracks)||!body.tracks.length||body.tracks.length>PLAYLIST_CANDIDATE_LIMIT||!body.tracks.every(validTrack)||new Set(body.tracks.map(reviewKey)).size!==body.tracks.length)return Response.json({error:'Send between 1 and 20 distinct candidate songs.'},{status:400,headers});
+    if(!Array.isArray(body?.tracks)||!body.tracks.length||body.tracks.length>PLAYLIST_CANDIDATE_LIMIT||!body.tracks.every(validTrack)||new Set(body.tracks.map(reviewKey)).size!==body.tracks.length)return Response.json({error:'Send between 1 and '+PLAYLIST_CANDIDATE_LIMIT+' distinct candidate songs.'},{status:400,headers});
     const availability=reviewAvailability();
     if(!availability.ready)return Response.json({error:availability.reason},{status:503,headers});
     for(const [id,at] of recent)if(at<Date.now()-60000)recent.delete(id);

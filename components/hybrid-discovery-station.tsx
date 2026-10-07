@@ -19,7 +19,6 @@ import {accountFetch} from "@/lib/supabase/browser";
 import {AccountButton,useAccount} from "./account-provider";
 import {LikedPlaylist} from "./liked-playlist";
 import {LikedSongs} from "./liked-songs";
-import {PlaylistImport} from "./playlist-import";
 import {safeAlbumReturn} from "@/lib/discovery-navigation";
 
 const picks=[{title:"SKELETONS",artist:"Travis Scott"},{title:"New Drug",artist:"Sunset Rollercoaster"}];
@@ -232,14 +231,6 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
       {account.ready&&userId===account.userId&&userId&&hydrated&&(playlistTarget?createPortal(
         <LikedSongs key={userId} compact liked={liked} disabled={liking} onExplore={exploreSong} onRemove={removeLiked}/>,playlistTarget
       ):<LikedSongs key={userId} liked={liked} disabled={liking} onExplore={exploreSong} onRemove={removeLiked}/>)}
-      {userId&&hydrated&&<PlaylistImport key={userId} onAdd={async tracks=>{
-        const expected=userId;
-        const response=await accountFetch('/api/station/session');
-        const session=await response.json() as {userId?:string|null};
-        if(!response.ok||session.userId!==expected||identity.current!==expected)throw new Error('Sign in again before importing.');
-        if(new Set([...liked,...tracks].map(songKey)).size>1000)throw new Error('Playlist limit is 1,000 songs. Existing songs were not removed.');
-        setLiked(previous=>tracks.reduce((result,track)=>addLiked(result,track),previous));
-      }}/>}
       {userId&&hydrated&&<LikedPlaylist key={userId+liked.map(songKey).join('|')} userId={userId} liked={liked} memory={memory} learning={learning}/>}
   </div></>;
 }

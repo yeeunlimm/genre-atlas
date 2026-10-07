@@ -26,11 +26,11 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.deepEqual(progress,[[1,3],[2,3],[3,3]]);
  const aborted=new AbortController();aborted.abort();await assert.rejects(collectLikedCandidates([seed],async()=>[],aborted.signal));
  const component=fs.readFileSync('components/liked-playlist.tsx','utf8');
- assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews')"));
- assert.ok(component.indexOf('setShortlist(candidates)')<component.indexOf("await json<ReviewAvailability>('/api/station/reviews')"));
+ assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews',15000)"));
+ assert.ok(component.indexOf("await json<ReviewAvailability>('/api/station/reviews',15000)")<component.indexOf('await collectLikedCandidates('));
  const pool=Array.from({length:40},(_,i)=>row('pool'+i,'artist'+i,.99-i*.01));
  const shortlist=shortlistLikedCandidates(pool,[seed],blankMemory(),{},now);
- assert.equal(shortlist.length,20);assert.deepEqual(shortlist.map(r=>r.track.id),pool.slice(0,20).map(r=>r.track.id));
+ assert.equal(shortlist.length,30);assert.deepEqual(shortlist.map(r=>r.track.id),pool.slice(0,30).map(r=>r.track.id));
  assert.deepEqual(shortlistLikedCandidates(pool,[],blankMemory(),{},now),[]);
  const sentiment=new Map(pool.map((r,i)=>[reviewKey(r.track),summary(i<6?-.3:.3)]));
  const ten=selectLikedPlaylist(shortlist,[seed],blankMemory(),{},sentiment,now);

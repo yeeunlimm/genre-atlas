@@ -1,14 +1,17 @@
 # Review-filtered playlists: implementation boundary
 
-## Current flow: 20 candidates → comment filter → at most 10 (2026-10-07)
+## Current flow: 30 candidates → comment filter → at most 10 (2026-10-07)
 
+- Check server comment-analysis readiness before fetching candidates. If it is
+  unavailable, report the reason immediately without collecting candidates,
+  creating a playlist, or changing likes/repeat history.
 - Rank independent candidates from the five latest likes FIRST, excluding liked
   recordings/albums, dislikes, repeat history and duplicate artists. Freeze at
-  most 20 candidates. No discovery queue or station selection is reused.
+  most 30 candidates. No discovery queue or station selection is reused.
 - Candidate collection reports completed sources and shares a 90-second client
   request budget; failing/timed-out sources do not discard successful results.
 - Only those candidates are sent to `/api/station/reviews`. The authenticated,
-  same-origin POST accepts 1–20 distinct tracks and streams a result per track.
+  same-origin POST accepts 1–30 distinct tracks and streams a result per track.
 - For each track, search at most five music videos, fetch their metadata and
   conservatively match song, artist channel, version and duration. This is a
   metadata heuristic, not proof of official channel ownership. Ambiguous matches
@@ -23,8 +26,10 @@
   change. A truncated stream never produces a final playlist or saves repeats.
 - A 24-hour warm-process score cache avoids repeat inference when available. It
   is NOT durable storage, a daily schedule, or a guarantee across server instances.
-  Negative/no-evidence lookup results cache for one hour. No raw comments persist.
-- Each batch is serial, capped at 20 tracks, with a 235-second work deadline and
+  Ready scores (including zero/negative) cache for 24 hours; no-match/no-evidence
+  lookup results cache for one hour. Expired entries are removed on a later cache
+  insertion, not by an immediate deletion timer. No raw comments persist.
+- Each batch is serial, capped at 30 tracks, with a 235-second work deadline and
   300-second server duration. At most one batch runs per warm process; a one-minute
   per-account throttle also applies in that process. These are NOT distributed
   quota limits. Production growth needs a shared job queue/quota counter.
@@ -36,14 +41,14 @@ loaded into temporary cache at runtime, not shipped to the browser or Git.
 
 ### Activation and verification boundary
 
-Candidate preview works independently of comment-analysis availability. The
+The build action checks availability before candidate collection. The
 comment stage requires both server-only `YOUTUBE_API_KEY` and
 `YOUTUBE_DERIVED_METRICS_APPROVED=true`. **The flag does not accept terms or confer
 provider approval.** Do not set it without confirming the use case/required terms:
 https://developers.google.com/youtube/terms/derived-metrics-policy . No approval or
 key setting was changed during this implementation.
 
-Tests cover 30 pooled candidates → 20 shortlisted → 20 synthetic comment analyses
+Tests cover 40 pooled candidates → 30 shortlisted → 30 synthetic comment analyses
 → 10 positive tracks, fewer-than-ten, source matching, guards, throttling,
 cancellation, account boundaries, stream truncation and unmodified discovery.
 The actual pretrained model was also run on authored positive/negative sentences.
@@ -53,7 +58,11 @@ Daily scheduling and persistent member playlists remain outside this change.
 
 Tests: `node scripts/test-playlist-review-flow.cjs`,
 `node scripts/test-review-api.cjs`, `node scripts/test-liked-playlist.cjs`,
-`node scripts/test-review-sentiment.cjs`, `node scripts/test-kakao-auth.cjs`.
+`node scripts/test-review-sentiment.cjs`, `node scripts/test-kakao-auth.cjs`,
+`node scripts/test-playlist-preflight.cjs`, `node scripts/test-no-playlist-import.cjs`.
+
+The text-list import UI is no longer connected to the station. Existing saved
+likes remain intact; songs are added individually through their like controls.
 
 ## Earlier implementation and local experiments (historical)
 

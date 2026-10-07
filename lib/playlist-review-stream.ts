@@ -3,9 +3,9 @@ import {PLAYLIST_CANDIDATE_LIMIT} from './liked-playlist';
 import {ReviewProviderError} from './youtube-review-match';
 import type {ReviewTrack,TrackReview,ReviewEvent} from './playlist-review-types';
 
-// Serial and bounded: never analyse outside the submitted <=20-track shortlist.
+// Serial and bounded: never analyse outside the submitted candidate shortlist.
 export function playlistReviewStream(tracks:ReviewTrack[],analyze:(track:ReviewTrack,signal:AbortSignal)=>Promise<TrackReview>,requestSignal:AbortSignal,release:()=>void){
-  if(!tracks.length||tracks.length>PLAYLIST_CANDIDATE_LIMIT)throw new Error('Expected 1–20 candidates.');
+  if(!tracks.length||tracks.length>PLAYLIST_CANDIDATE_LIMIT)throw new Error('Expected 1–'+PLAYLIST_CANDIDATE_LIMIT+' candidates.');
   const cancel=new AbortController();
   const signal=AbortSignal.any([cancel.signal,requestSignal,AbortSignal.timeout(235000)]);
   const encoder=new TextEncoder();

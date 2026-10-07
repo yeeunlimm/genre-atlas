@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import type {StationTrack} from '@/lib/station-catalog';
 import {songKey,type Candidate,type Memory} from '@/lib/hybrid-station';
-import {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey} from '@/lib/liked-playlist';
+import {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey,PLAYLIST_CANDIDATE_LIMIT} from '@/lib/liked-playlist';
 import {featureVector,modelScore,trainRanker,type LearningData} from '@/lib/station-learning';
 import type {ReviewSummary} from '@/lib/review-sentiment';
 import type {TrackReview,ReviewAvailability} from '@/lib/playlist-review-types';
@@ -29,9 +29,14 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
   async function build(){
     if(controller.current||!liked.length)return;
     const c=new AbortController();controller.current=c;setBusy(true);setError('');setPlaylist(null);setShortlist([]);setReviews({});
-    setNote('Choosing up to 20 candidates from your five most recent likes…');
+    setNote('Checking comment-analysis availability…');
     try{
       async function json<T>(url:string,timeout=40000):Promise<T>{if(timeout<=0)throw new Error('Candidate collection time limit reached.');const response=await accountFetch(url,{signal:AbortSignal.any([c.signal,AbortSignal.timeout(timeout)])});const data=await response.json() as T & {error?:string};if(!response.ok)throw new Error(data.error||'A playlist source failed.');return data;}
+      // Do not collect candidates or change repeat history if analysis cannot run.
+      const availability=await json<ReviewAvailability>('/api/station/reviews',15000);
+      c.signal.throwIfAborted();
+      if(!availability.ready)throw new Error(availability.reason||'Comment analysis is not available. No playlist was created.');
+      setNote('Choosing up to '+PLAYLIST_CANDIDATE_LIMIT+' candidates from your five most recent likes…');
       const candidateDeadline=Date.now()+90000;
       const result=await collectLikedCandidates(liked,async(seed,route)=>{
         if(route==='credits'){
@@ -45,10 +50,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       const score=model.active?(row:Candidate)=>modelScore(model,featureVector(row,liked,learning)):undefined;
       const candidates=shortlistLikedCandidates(result.rows,liked,memory,recent.current,Date.now(),score);
       if(!candidates.length)throw new Error(result.failed?'Candidate sources could not provide new songs. Retry later.':'No new connected candidates were found for your likes. Try adding another liked song.');
-      setShortlist(candidates);setNote(candidates.length+' candidates selected. Checking comment-analysis availability…');
-      const availability=await json<ReviewAvailability>('/api/station/reviews');
-      c.signal.throwIfAborted();
-      if(!availability.ready)throw new Error(availability.reason||'Comment analysis is not available. No candidates were added to the playlist.');
+      setShortlist(candidates);
       setNote('Analysing YouTube comments · 0 / '+candidates.length+'. The first model load can take longer.');
       const summaries=new Map<string,ReviewSummary>(),checked=new Set<string>(),wanted=new Set(candidates.map(r=>reviewKey(r.track)));
       const response=await accountFetch('/api/station/reviews',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([c.signal,AbortSignal.timeout(270000)]),body:JSON.stringify({tracks:candidates.map(({track:t})=>({title:t.title,artist:t.artist,primaryArtistName:t.primaryArtistName,durationMs:t.durationMs}))})});
@@ -81,7 +83,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
   }
   return <section className="station-playlist" aria-label="Playlist from my likes" aria-busy={busy}>
     <h3>Playlist from your likes</h3>
-    <p>Your likes → up to 20 recommended candidates → YouTube comment sentiment → up to 10 tracks.</p>
+    <p>Your likes → up to {PLAYLIST_CANDIDATE_LIMIT} recommended candidates → YouTube comment sentiment → up to 10 tracks.</p>
     <p>Only scores above zero pass. One song per artist. Separate from song discovery.</p>
     <div className="playlist-build-actions"><button disabled={busy||!liked.length} onClick={()=>void build()}>{busy?'Building your personal playlist…':'Make a 10-track playlist'}</button>{busy&&<button onClick={cancel}>Cancel</button>}</div>
     {!liked.length&&<p>Like at least one song to start.</p>}
