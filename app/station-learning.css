@@ -6,3 +6,6 @@
 .playlist-candidates summary{cursor:pointer;line-height:1.7;min-height:32px}
 .playlist-candidates a{display:inline-block;font-size:12px;margin-top:8px;text-decoration:underline;text-underline-offset:3px}
 .station-playlist li b,.station-playlist li small,.station-playlist>p{overflow-wrap:anywhere}
+.playlist-candidates .station-artwork{flex:0 0 clamp(56px,9vw,88px);width:clamp(56px,9vw,88px);align-self:center}
+.playlist-candidates .station-artwork-placeholder{font-size:10px;gap:4px;padding:4px}
+@media(max-width:480px){.playlist-candidates li{gap:10px}}

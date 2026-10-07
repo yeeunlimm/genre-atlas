@@ -131,6 +131,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
       Fragment: 'fragment',
     },
     '@/lib/supabase/browser': {accountFetch},
+    './station-artwork': {StationArtwork:()=>null},
     '@/lib/station-learning': {trainRanker: () => ({active: false})},
     '@/lib/liked-playlist': {
       ...playlistLogic,

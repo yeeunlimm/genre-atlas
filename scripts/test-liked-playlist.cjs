@@ -66,6 +66,10 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.deepEqual(progress,[[1,3],[2,3],[3,3]]);
  const aborted=new AbortController();aborted.abort();await assert.rejects(collectLikedCandidates([seed],async()=>[],aborted.signal));
  const component=fs.readFileSync('components/liked-playlist.tsx','utf8');
+ assert.ok(component.includes('candidatesOpen&&<StationArtwork track={track} size="recommendation"/>'),'Each expanded candidate uses its own album artwork; closed details do not fetch covers.');
+ assert.ok(component.includes('setCandidatesOpen(event.currentTarget.open)'));
+ const artworkCss=fs.readFileSync('app/station-learning.css','utf8');
+ assert.ok(artworkCss.includes('.playlist-candidates .station-artwork{flex:0 0 clamp(56px,9vw,88px)'));
  assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews',15000)"));
  assert.ok(component.indexOf("await json<ReviewAvailability>('/api/station/reviews',15000)")<component.indexOf('await collectLikedCandidates('));
  const pool=Array.from({length:40},(_,i)=>row('pool'+i,'artist'+i,.99-i*.01));

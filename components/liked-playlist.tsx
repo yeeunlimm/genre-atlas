@@ -10,10 +10,12 @@ import {readReviewStream} from '@/lib/read-review-stream';
 import {trackYouTubeUrl} from '@/lib/discovery-station';
 import {accountFetch} from '@/lib/supabase/browser';
 import type {LiveStationResult} from '@/lib/live-station';
+import {StationArtwork} from './station-artwork';
 
 export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;liked:StationTrack[];memory:Memory;learning:LearningData}){
   const [playlist,setPlaylist]=useState<Candidate[]|null>(null),[shortlist,setShortlist]=useState<Candidate[]>([]);
   const [reviews,setReviews]=useState<Record<string,TrackReview>>({}),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[error,setError]=useState('');
+  const [candidatesOpen,setCandidatesOpen]=useState(false);
   const controller=useRef<AbortController|null>(null),recent=useRef<Record<string,number>>({});
   const storageKey='genre-atlas.liked-playlist.v1:'+encodeURIComponent(userId);
   const likesKey=JSON.stringify(liked.map(songKey));
@@ -92,8 +94,8 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
     <div className="playlist-build-actions"><button disabled={busy||!liked.length} onClick={()=>void build()}>{busy?'Building your personal playlist…':'Make a 10-track playlist'}</button>{busy&&<button onClick={cancel}>Cancel</button>}</div>
     {!liked.length&&<p>Like at least one song to start.</p>}
     <p role="status" aria-atomic="true">{note}</p>{error&&<p role="alert">{error}</p>}
-    {shortlist.length>0&&<details className="playlist-candidates"><summary>Candidates · {shortlist.length} · Results {Object.keys(reviews).length}/{shortlist.length}</summary>
-      <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div></li>;})}</ol>
+    {shortlist.length>0&&<details className="playlist-candidates" onToggle={event=>setCandidatesOpen(event.currentTarget.open)}><summary>Candidates · {shortlist.length} · Results {Object.keys(reviews).length}/{shortlist.length}</summary>
+      <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div>{candidatesOpen&&<StationArtwork track={track} size="recommendation"/>}</li>;})}</ol>
     </details>}
     {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates qualified. Unmatched recordings and analysis errors were not used to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small><small>{reviewLabel(reviews[reviewKey(r.track)])}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
     <small>Up to 50 comments per video. If comments are disabled or absent, another matching video is tried (up to three total). Experimental English-model scoring and optional Korean-dictionary scoring, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
