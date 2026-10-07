@@ -27,7 +27,7 @@ export function LikedSongs({liked,onExplore,onRemove,disabled=false}:{liked:Stat
   const [selected,setSelected]=useState<string|null>(null),[hovered,setHovered]=useState<string|null>(null);
   const active=liked.find(t=>songKey(t)===(hovered||selected))||liked[0];
   return <section className={styles.sleeve} id="liked-songs" aria-label="Liked songs">
-    <header className={styles.header}><span>YOUR PERSONAL PRESSING / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
+    <header className={styles.header}><span>YOUR PLAYLIST / {String(liked.length).padStart(2,'0')} TRACKS</span></header>
     <div className={styles.stage}>
       <div className={styles.record} aria-hidden="true"><div className={styles.label}><i/><RecordCaption title={active?.title||'SIDE A'} artist={active?.artist||'33⅓ RPM'}/></div></div>
       <div className={styles.covers} role="group" aria-label="Liked songs around the record">
