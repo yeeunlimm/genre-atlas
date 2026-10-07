@@ -102,21 +102,35 @@ export async function musicBrainzCatalog(artist:string,title?:string):Promise<St
   const d=await mb("recording/?query="+encodeURIComponent(query)+"&limit=40");
   return unique((d.recordings||[]).filter((r:Raw)=>!r.video&&r["artist-credit"]?.[0]?.artist?.id===person.id).map(parseRecording).filter((t:StationTrack|null):t is StationTrack=>!!t&&(!title||normalize(t.title)===normalize(title))));
 }
+export function appleSongSearchPaths(query:string,limit:number){
+  // Keep the existing US catalog and add Korea rather than replacing it.
+  // Catalog territory changes what is licensed and how Korean titles are displayed.
+  return [
+    "search?"+new URLSearchParams({term:query,media:"music",entity:"song",limit:String(limit),country:"US",lang:"en_us"}),
+    "search?"+new URLSearchParams({term:query,media:"music",entity:"song",limit:String(limit),country:"KR",lang:"ko_kr"}),
+  ];
+}
+async function appleSongSearch(query:string,limit:number){
+  const attempts=await Promise.allSettled(appleSongSearchPaths(query,limit).map(apple));
+  const completed=attempts.filter((attempt):attempt is PromiseFulfilledResult<Raw>=>attempt.status==="fulfilled");
+  if(!completed.length)throw (attempts[0] as PromiseRejectedResult).reason;
+  return completed.flatMap(attempt=>Array.isArray(attempt.value.results)?attempt.value.results:[]);
+}
 export async function liveSearch(q:string,limit=40,catalog="apple"){
   if(q.trim().length<2||q.length>120)throw new StationError("Enter 2–120 characters to search for a song or artist.",400);
   const local=searchTracks(q,stationCatalog);
   if(catalog==="deezer"){const result=await deezerSearch(q,limit);rememberTracks(result.tracks);return result;}
   if(catalog==="musicbrainz")return {tracks:rememberTracks(await searchMusicBrainz(q)),provider:"MusicBrainz",canExpand:false,warning:"Alternate recordings and editions from MusicBrainz. Choose the version you want to explore."};
   try{
-    const data=await apple("search?"+new URLSearchParams({term:q,media:"music",entity:"song",limit:String(limit),country:"US",lang:"en_us"}));
-    const live=(data.results||[]).map(parseApple).filter(Boolean) as StationTrack[];
+    const rows=await appleSongSearch(q,limit);
+    const live=rows.map(parseApple).filter(Boolean) as StationTrack[];
     const tracks=unique([...live,...local.filter(t=>!live.some(x=>sameSong(t,x)&&sameAlbum(t,x)))]);
     rememberTracks(tracks);
     // Artist+song queries should not put tribute covers ahead of the named artist.
     const terms=q.split(/\s+/).map(normalize).filter(Boolean);
     const relevance=(t:StationTrack)=>terms.filter(term=>normalize(t.artist+" "+t.title).includes(term)).length*10+(normalize(primaryArtist(t.artist)).length>2&&normalize(q).includes(normalize(primaryArtist(t.artist)))?5:0);
     tracks.sort((a,b)=>relevance(b)-relevance(a)||Number(a.explicitness==="cleaned")-Number(b.explicitness==="cleaned"));
-    return {tracks,provider:"Apple catalog",canExpand:data.resultCount>=limit&&limit<200,warning:""};
+    return {tracks,provider:"Apple catalog",canExpand:live.length>=limit&&limit<200,warning:"Apple US and Korea catalogs checked."};
   }catch(e){
     if(catalog==="apple-only")throw e;
     // A second public catalog keeps search usable when Apple's service is unavailable.

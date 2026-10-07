@@ -26,6 +26,9 @@ const credits=live.parseCredits([{type:"producer",artist:{id:"person",name:"Kevi
 assert.deepEqual(credits.map(c=>c.role),["producer","mixing"]);assert.ok(credits.every(c=>c.scope==="release"));
 assert.equal(load("discovery-station").searchTracks("아이유",stationCatalog).length,0);
 assert.ok(live.normalize("아이유").length>0);
+const applePaths=live.appleSongSearchPaths("아이유 밤편지",40).map(path=>new URLSearchParams(path.split("?")[1]));
+assert.deepEqual(applePaths.map(params=>params.get("country")),["US","KR"]);
+assert.deepEqual(applePaths.map(params=>params.get("term")),["아이유 밤편지","아이유 밤편지"]);
 console.log("PASS: live catalog parsing, identity/version safety, album exclusion, credit roles/scopes, Unicode search.");
 if(process.argv.includes("--live")){
   (async()=>{
