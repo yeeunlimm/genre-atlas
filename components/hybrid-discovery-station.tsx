@@ -11,11 +11,16 @@ import {StationArtwork} from "./station-artwork";
 import {addLiked,emptyProfile,profileKey,readProfile,stationSeeds} from "@/lib/station-profile";
 import {attemptKey,emptyStationMessage,jobKey,recoveryJobs,type Job,type Progress} from "@/lib/station-recovery";
 import {mergeSearch} from "@/lib/catalog-search";
+import {accountFetch} from "@/lib/supabase/browser";
+import {AccountButton,useAccount} from "./account-provider";
 
 const picks=[{title:"SKELETONS",artist:"Travis Scott"},{title:"New Drug",artist:"Sunset Rollercoaster"},{title:"Victory Lap",artist:"Fred again.."},{title:"Boy's a liar",artist:"PinkPantheress"},{title:"Summer Gypsy",artist:"Nujabes"}];
 const asCredits=(seed:StationTrack,rows:ReturnType<typeof recommend>):Candidate[]=>rows.filter(r=>r.reasons.some(x=>x.kind==="credit"||x.kind==="sample")).map(r=>({...r,paths:[{route:"credits",seedId:seed.id,confidence:Math.min(.95,.6+r.score*.035)}]}));
 
 export function DiscoveryStation(){
+  const account=useAccount();
+  const identityRequest=useRef(0);
+  useEffect(()=>{if(account.ready&&mounted.current&&identity.current!==undefined&&identity.current!==account.userId)void loadIdentity();},[account.ready,account.userId]);
   const [query,setQuery]=useState(""),[matches,setMatches]=useState<StationTrack[]>([]),[origin,setOrigin]=useState<StationTrack>(),[seeds,setSeeds]=useState<StationTrack[]>([]);
   const [userId,setUserId]=useState<string|null>(null),[liked,setLiked]=useState<StationTrack[]>([]),[liking,setLiking]=useState(false),[authError,setAuthError]=useState("");
   const identity=useRef<string|null|undefined>(undefined),mounted=useRef(false),likeRequest=useRef<AbortController|null>(null);
@@ -37,12 +42,13 @@ export function DiscoveryStation(){
     updateLearning(rateExposure(learningRef.current,shown.id,action));
   }
   async function loadIdentity(){
+    const requestId=++identityRequest.current;
     setHydrated(false);setAuthError("");let id:string|null=null;
-    try{const response=await fetch("/api/station/session",{cache:"no-store"});if(!response.ok)throw new Error();const d=await response.json() as {userId?:string|null};id=typeof d.userId==="string"?d.userId:null;}catch{if(mounted.current)setAuthError("Sign-in could not be checked. Discovery still works; retry to use likes.");}
-    if(!mounted.current)return null;
+    try{const response=await accountFetch("/api/station/session");if(!response.ok)throw new Error();const d=await response.json() as {userId?:string|null};id=typeof d.userId==="string"?d.userId:null;}catch{if(mounted.current)setAuthError("Sign-in could not be checked. Discovery still works; retry to use likes.");}
+    if(!mounted.current||requestId!==identityRequest.current)return null;
     let profile=emptyProfile();
     try{const raw=localStorage.getItem(profileKey(id));profile=readProfile(raw?JSON.parse(raw):!id?{memory:cleanMemory(JSON.parse(localStorage.getItem(MEMORY_KEY)||"null"))}:null,!!id);}catch{setStorageNote("Browser storage is unavailable. Your preferences will work in this tab only.");}
-    if(identity.current!==undefined&&identity.current!==id){stationRequest.current?.abort();setRows([]);setSeeds([]);setCurrent(undefined);setConsumed([]);setProgress({});}
+    if(identity.current!==undefined&&identity.current!==id){stationRequest.current?.abort();likeRequest.current?.abort();setLiking(false);setRows([]);setSeeds([]);setCurrent(undefined);setConsumed([]);setProgress({});}
     let training=emptyLearning();try{const raw=localStorage.getItem(learningKey(id));training=readLearning(raw?JSON.parse(raw):null);}catch{}
     identity.current=id;setUserId(id);setMemory(profile.memory);setLiked(profile.liked);updateLearning(training);exposure.current=null;setPlaylist(null);setHydrated(true);return profile;
   }
@@ -135,7 +141,7 @@ export function DiscoveryStation(){
   }
   async function like(track:StationTrack,row?:Candidate){
     if(!userId||liking||!hydrated)return;const controller=new AbortController();likeRequest.current=controller;setLiking(true);
-    try{const response=await fetch("/api/station/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({trackId:track.id}),signal:controller.signal});const data=await response.json() as {userId?:string;allowed?:boolean;error?:string};
+    try{const response=await accountFetch("/api/station/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({trackId:track.id}),signal:controller.signal});const data=await response.json() as {userId?:string;allowed?:boolean;error?:string};
       if(response.status===401||response.ok&&data.userId!==userId){await loadIdentity();setNotice("Please sign in again, then like this song.");return;}
       if(!response.ok||!data.allowed)throw new Error(data.error||"Your like could not be confirmed. Please retry.");
       if(controller.signal.aborted)return;
@@ -151,9 +157,8 @@ export function DiscoveryStation(){
   function buildPlaylist(){setPlaylist((onePerArtist([...(shown?[shown]:[]),...queue].filter(r=>!excluded(r.track,seeds)&&memory.votes[songKey(r.track)]?.vote!=="dislike"),consumed) as Candidate[]).slice(0,10));}
   function exportTraining(){const url=URL.createObjectURL(new Blob([JSON.stringify(exportLearning(learning),null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="genre-atlas-ratings-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   const returnTo=(origin?"/?stationTrack="+encodeURIComponent(origin.id):"/")+"#discovery-station";
-  const signIn="/signin-with-chatgpt?return_to="+encodeURIComponent(returnTo),signOut="/signout-with-chatgpt?return_to="+encodeURIComponent(returnTo);
   const likedSong=(track:StationTrack)=>liked.some(t=>songKey(t)===songKey(track));
-  function likeControl(track:StationTrack,row?:Candidate){return userId?<button disabled={liking||!hydrated||likedSong(track)} aria-label={likedSong(track)?"Liked "+track.title:"Like "+track.title} onClick={()=>void like(track,row)}><ThumbsUp size={16} aria-hidden="true"/>{liking?"Saving…":likedSong(track)?"Liked":"Like"}</button>:<a className="station-signin" href={signIn} target="_top"><ThumbsUp size={16} aria-hidden="true"/>Sign in to like</a>;}
+  function likeControl(track:StationTrack,row?:Candidate){return userId?<button disabled={liking||!hydrated||likedSong(track)} aria-label={likedSong(track)?"Liked "+track.title:"Like "+track.title} onClick={()=>void like(track,row)}><ThumbsUp size={16} aria-hidden="true"/>{liking?"Saving…":likedSong(track)?"Liked":"Like"}</button>:<button className="station-signin" disabled={account.busy||!account.ready} onClick={()=>void account.signIn(returnTo)}><ThumbsUp size={16} aria-hidden="true"/>카카오 로그인 후 좋아요</button>;}
   const sources=shown?[...new Map(shown.reasons.flatMap(r=>r.sources).map(s=>[s.url,s])).values()]:[];
   return <section className="station" id="discovery-station" aria-labelledby="station-title">
     <header className="station-header"><div><span className="eyebrow">MORE WAYS INTO YOUR SOUND</span><h2 id="station-title"><Radio size={25} aria-hidden="true"/> Discovery Station</h2></div><span className="station-stamp">YOUR MIX</span></header>
@@ -162,7 +167,7 @@ export function DiscoveryStation(){
       <form onSubmit={e=>{e.preventDefault();void search();}}><label htmlFor="station-search">Find a starting song</label><div className="station-search"><Search size={18} aria-hidden="true"/><input id="station-search" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Song or artist" maxLength={120}/><button disabled={searching}>{searching?"Searching…":"Search"}</button></div></form>
       <p className="station-meta">Select one song. Recommendations start right away.</p>
       <div className="station-seeds">{picks.map(pick=><button key={pick.title} data-pick={pick.title} aria-label={pick.title+" by "+pick.artist} onClick={()=>{const q=pick.title+" "+pick.artist;setQuery(q);void search(q);}}>{pick.title}</button>)}</div>
-      <div className="station-account">{!hydrated?<p className="station-meta">Checking sign-in…</p>:userId?<><span>Signed in · {liked.length} liked {liked.length===1?"song":"songs"}</span><a href={signOut} target="_top">Sign out</a></>:<><span>Discover freely. Sign in only to like.</span><a href={signIn} target="_top">Sign in with ChatGPT</a></>}{authError&&<div role="alert"><p>{authError}</p><button onClick={()=>void loadIdentity()}>Retry sign-in check</button></div>}</div>
+      <div className="station-account">{!hydrated?<p className="station-meta">Checking sign-in…</p>:userId?<span>Signed in · {liked.length} liked {liked.length===1?"song":"songs"} · saved in this browser</span>:<span>Discover freely. Sign in only to like.</span>}<AccountButton returnTo={returnTo}/>{authError&&<div role="alert"><p>{authError}</p><button onClick={()=>void loadIdentity()}>Retry sign-in check</button></div>}</div>
       <p role="status" className="station-meta">{searchNote}</p>
       {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
       <div className="station-catalog" aria-label="Starting tracks" aria-busy={searching}>{matches.map(t=><button key={t.id} disabled={!hydrated||liking} aria-pressed={origin?.id===t.id} onClick={()=>void start(t)}><b>{t.title}</b><span>{t.artist} · {t.album}{t.explicitness==="cleaned"?" · Clean edition":""}</span><small>{t.catalogKind==="deezer"?"Deezer":t.catalogKind==="apple"?"Apple":t.catalogKind==="musicbrainz"?"MusicBrainz":"Source-checked starter record"}</small></button>)}{searched&&!searching&&!searchError&&!matches.length&&<p>No matching recording in the catalogs checked. Try another spelling or other catalog versions; catalog coverage is not complete.</p>}</div>

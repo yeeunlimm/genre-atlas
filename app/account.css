@@ -1,0 +1,8 @@
+.account-control{display:inline-flex;flex-direction:column;gap:8px;max-width:280px}
+.account-button{min-height:44px;padding:10px 16px;border:1px solid #686868;border-radius:4px;font-size:14px;cursor:pointer;background:#181818;color:#fff}
+.account-button.kakao-button{background:#fee500;color:#191919;border-color:#fee500;font-weight:600}
+.account-button:disabled{opacity:.65;cursor:wait}
+.account-button:focus-visible{outline:2px solid #fff;outline-offset:4px}
+.account-error{font-size:14px;color:#ffb7b7;line-height:1.5}
+.account-page{max-width:660px;margin:12vh auto;padding:24px;line-height:1.7}
+.account-page h1{font-size:28px;margin:24px 0 12px}

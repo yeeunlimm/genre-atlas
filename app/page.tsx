@@ -8,6 +8,7 @@ import {ArtistAlbums} from "@/components/artist-albums";
 import {saveArtistReturn,readArtistReturn,clearArtistReturnMarker,restoreAlbumPosition,type ArtistReturn} from "@/lib/artist-return";
 import {ArtistCdPlayer} from "@/components/artist-cd-player";
 import {DiscoveryStation} from "@/components/discovery-station";
+import {AccountButton} from "@/components/account-provider";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
 import type {MusicArtist,AlbumArtwork} from "@/lib/youtube-music";
 type Artist=MusicArtist&{wiki?:GenreArtist};
@@ -125,7 +126,7 @@ export default function Home(){
  const activeNote=genreMode?(selectedGenre?"Independent NamuWiki genre discovery — not filtered from All related.":"Choose a genre in the sidebar.") : note;
  const relatedEmpty=<div role={error?"alert":undefined}><h3>{busy?"LOADING…":fallbackChoices.length?"CHOOSE ARTIST":error?"SOURCE UNAVAILABLE":artist?"NO RELATED ARTISTS":"NO ARTIST SELECTED"}</h3><p>{busy?busy:fallbackChoices.length?note:error|| (artist?note||"No related artists were returned. Explore a genre or retry.":"Search an artist above.")}</p>{!busy&&fallbackChoices.length>0&&<div className="artist-list" aria-label="Choose Deezer artist">{fallbackChoices.map(a=><button key={a.id} onClick={()=>void selectArtist(a)}><b>{a.name}</b><span>{compact(a.audience)} Deezer fans</span></button>)}</div>}{!busy&&artist&&<button className="secondary" onClick={()=>void selectArtist(artist)}>Retry related artists</button>}</div>;
  return <main>
- <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><nav className="station-nav" aria-label="Music discovery"><a href="#discovery-station">Discovery Station</a><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a></nav></header>
+ <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><nav className="station-nav" aria-label="Music discovery"><a href="#discovery-station">Discovery Station</a><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a><AccountButton/></nav></header>
  <div className="workspace">
  <section className="search-deck" aria-label="Artist discovery">
  <div className="search-main"><img className="discovery-ornament" src="/reference/white-ornate-clef-v1.png" alt="" aria-hidden="true" width={220} height={390}/><h1>DISCOVER</h1>

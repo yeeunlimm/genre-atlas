@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import {AccountProvider} from "@/components/account-provider";
+import "./account.css";
 import "./globals.css";
 import "./youtube.css";
 import "./studio.css";
@@ -25,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><AccountProvider>{children}</AccountProvider></body>
     </html>
   );
 }
