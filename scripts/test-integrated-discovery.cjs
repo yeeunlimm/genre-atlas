@@ -18,4 +18,8 @@ assert.ok(station.includes('onExplore={exploreSong}'));assert.ok(station.include
 assert.ok(station.indexOf('personal-playlist-tools')>station.lastIndexOf('</section>'),'Personal playlist controls stay outside the hidden song workspace');
 assert.ok(station.includes('if(alive&&q)void search(q)'),'Unavailable direct recordings fall back to version selection');
 assert.ok(album.includes('albumSongHref(t,data.release,albumPath)'));
+assert.ok(station.indexOf('<header className="station-header">')<station.indexOf('<div className="station-layout">'),'Discovery heading spans above the two columns');
+assert.ok(station.includes('<h2 id="station-title">SONG DISCOVERY</h2>'));
+assert.ok(station.includes('<h3>{origin.title}</h3>'),'Starting song is below the discovery heading');
+assert.ok(!/0[123] \/ (STARTING POINT|SONG DISCOVERY|ARTIST DISCOVERY|THE DISCOGRAPHY)/.test(home+station),'Section numbers are removed');
 console.log('PASS integrated Artist/Song modes, retained station, independent playlist tools, album track links and safe return navigation.');

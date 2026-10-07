@@ -1,7 +1,8 @@
 "use client";
 
-import {useState} from "react";
+import {useEffect,useRef,useState,type KeyboardEvent} from "react";
 import collection from "@/lib/album-collection.json";
+import {loopScrollTop,wrapAlbumIndex} from "@/lib/collection-loop";
 
 type Album=(typeof collection.albums)[number];
 
@@ -24,10 +25,41 @@ function RecordSleeve({album,large=false}:{album:Album;large?:boolean}){
 export function AlbumWall({onExploreArtist}:{onExploreArtist:(name:string)=>void}){
  const albums=[...collection.albums,...collection.rightColumn];
  const [selected,setSelected]=useState<Album>(albums[0]);
- const renderAlbum=(album:Album)=><button key={album.sourceUrl} type="button" className="album-tile"
-   aria-label={"View "+album.title+" by "+album.artist} aria-pressed={selected.sourceUrl===album.sourceUrl}
+ const [focusIndex,setFocusIndex]=useState(0);
+ const rail=useRef<HTMLDivElement>(null),span=useRef(0);
+ useEffect(()=>{
+  const node=rail.current;if(!node)return;
+  const measure=()=>{
+   const first=node.children[0] as HTMLElement,middle=node.children[albums.length] as HTMLElement;
+   if(!first||!middle)return;
+   const next=middle.offsetTop-first.offsetTop;if(next<=0)return;
+   const phase=span.current?(loopScrollTop(node.scrollTop,span.current)-span.current)/span.current:0;
+   span.current=next;node.scrollTop=next*(1+phase);
+  };
+  measure();const observer=new ResizeObserver(measure);observer.observe(node);if(node.children[0])observer.observe(node.children[0]);
+  return()=>observer.disconnect();
+ },[albums.length]);
+ function focusAlbum(index:number){
+  const node=rail.current;if(!node)return;
+  const next=wrapAlbumIndex(index,albums.length),button=node.children[albums.length+next] as HTMLButtonElement;
+  setFocusIndex(next);button?.focus({preventScroll:true});
+  if(button)node.scrollTop=button.offsetTop-8;
+ }
+ function browse(event:KeyboardEvent<HTMLDivElement>){
+  if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+  const button=(event.target as HTMLElement).closest<HTMLButtonElement>("[data-album-index]");
+  const index=button?Number(button.dataset.albumIndex):null;
+  const next=event.key==="Home"?0:event.key==="End"?albums.length-1:event.key==="ArrowDown"?(index===null?0:index+1):event.key==="ArrowUp"?(index===null?albums.length-1:index-1):null;
+  if(next===null)return;event.preventDefault();focusAlbum(next);
+ }
+ const renderAlbum=(album:Album,index:number,copy:number)=><button key={copy+":"+album.sourceUrl} type="button" className={copy===1?"album-tile":"album-tile album-tile-copy"}
+   data-album-index={index} data-copy={copy} data-selected={selected.sourceUrl===album.sourceUrl}
+   tabIndex={copy===1&&index===focusIndex?0:-1} aria-hidden={copy===1?undefined:true}
+   aria-label={"View "+album.title+" by "+album.artist} aria-pressed={copy===1?selected.sourceUrl===album.sourceUrl:undefined}
    title={album.artist+" — "+album.title}
-   onClick={()=>setSelected(album)}>
+   onMouseDown={event=>{if(copy!==1)event.preventDefault();}}
+   onFocus={()=>{if(copy!==1)focusAlbum(index);else setFocusIndex(index);}}
+   onClick={()=>{setSelected(album);if(copy!==1)focusAlbum(index);}}>
    <RecordSleeve album={album}/>
   </button>;
  return <section className="album-wall" id="the-collection" aria-label="Album cover collection">
@@ -41,7 +73,11 @@ export function AlbumWall({onExploreArtist}:{onExploreArtist:(name:string)=>void
    </div>
   </div>
    <div className="album-browser">
-    <div className="album-scroll-rail" role="group" aria-label="Choose a collection album" tabIndex={0}>{albums.map(renderAlbum)}</div>
+    <p id="collection-keyboard-help" className="sr-only">Use Up and Down to browse, Enter to select. The last album loops back to the first.</p>
+    <div ref={rail} className="album-scroll-rail" role="group" aria-label="Choose a collection album" tabIndex={0} aria-describedby="collection-keyboard-help" onKeyDown={browse} onScroll={event=>{
+     const node=event.currentTarget;if(!span.current)return;
+     const top=loopScrollTop(node.scrollTop,span.current);if(Math.abs(top-node.scrollTop)>.5)node.scrollTop=top;
+    }}>{[0,1,2].flatMap(copy=>albums.map((album,index)=>renderAlbum(album,index,copy)))}</div>
    </div>
   </div>
  </section>;

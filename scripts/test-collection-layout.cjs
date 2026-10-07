@@ -1,12 +1,17 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),React=require('react');
 const {renderToStaticMarkup}=require('react-dom/server');
 const collection=JSON.parse(fs.readFileSync('lib/album-collection.json','utf8'));
+const loop={exports:{}};
+new Function('exports','module',ts.transpileModule(fs.readFileSync('lib/collection-loop.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(loop.exports,loop);
 const m={exports:{}};
-new Function('exports','module','require',ts.transpileModule(fs.readFileSync('components/album-wall.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText)(m.exports,m,id=>id==='@/lib/album-collection.json'?collection:require(id));
+new Function('exports','module','require',ts.transpileModule(fs.readFileSync('components/album-wall.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText)(m.exports,m,id=>id==='@/lib/album-collection.json'?collection:id==='@/lib/collection-loop'?loop.exports:require(id));
 const html=renderToStaticMarkup(React.createElement(m.exports.AlbumWall,{onExploreArtist:()=>{}}));
 assert.equal((html.match(/class="album-cover-large"/g)||[]).length,1);
 assert.equal((html.match(/class="album-tile"/g)||[]).length,collection.albums.length+collection.rightColumn.length);
 assert.equal((html.match(/aria-pressed="true"/g)||[]).length,1);
+assert.equal((html.match(/class="album-tile album-tile-copy"/g)||[]).length,56);
+assert.equal((html.match(/tabindex="0"/g)||[]).length,2,'Only the rail and one canonical album are tab stops');
+assert.ok(html.includes('The last album loops back to the first.'));
 assert.ok(html.includes('class="album-title-link" href="/album?collection='));
 assert.ok(html.includes('class="album-artist-link"'));
 assert.ok(!html.includes('Scroll albums up')&&!html.includes('Scroll albums down'));

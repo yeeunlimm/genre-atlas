@@ -189,17 +189,8 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
     {searchTarget&&createPortal(songSearch,searchTarget)}
     <section className="station station-integrated" id="discovery-station" aria-labelledby="station-title" hidden={!active}>
     {!searchTarget&&songSearch}
-    <div className="station-layout"><aside className="station-picker">
-      <span className="eyebrow">01 / STARTING POINT</span>
-      {fromAlbum&&<a className="station-album-return" href={fromAlbum} onClick={event=>{
-        if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-        try{const ref=new URL(document.referrer);if(window.history.length>1&&ref.origin===window.location.origin&&ref.pathname+ref.search===fromAlbum){event.preventDefault();window.history.back();}}catch{}
-      }}>← Back to album</a>}
-      {origin?<div className="station-origin"><StationArtwork key={origin.id} track={origin} size="seed"/><div className="station-origin-copy"><h2>{origin.title}</h2><p className="station-artist">{artistLink(origin)}</p><p className="station-meta">{origin.album}</p><div className="station-feedback">{likeControl(origin)}</div><a className="source-link" href={trackYouTubeUrl(origin)} target="_blank" rel="noreferrer">Listen on YouTube ↗</a><small>One starting song. Its album and your saved likes are excluded.</small></div></div>:<div className="station-seed-empty"><div className="empty-record" aria-hidden="true"/><h2>SELECT A SONG</h2><p className="station-meta">Search above. Choose a recording to start discovering.</p></div>}
-      <div className="station-account">{!hydrated?<p className="station-meta">Checking sign-in…</p>:userId?<span>Signed in · {liked.length} liked {liked.length===1?"song":"songs"} · saved in this browser</span>:<span>Discover freely. Sign in only to like.</span>}<AccountButton returnTo={returnTo}/>{authError&&<div role="alert"><p>{authError}</p><button onClick={()=>void loadIdentity()}>Retry sign-in check</button></div>}</div>
-      {userId&&hydrated&&<a className="station-signin" href="#liked-songs">View your playlist</a>}
-    </aside><div className="station-output">
-      <header className="station-header"><div><span className="eyebrow">02 / SONG DISCOVERY</span><h2 id="station-title">SONGS</h2></div><span className="station-stamp">SELECTED SONG ONLY</span></header>
+    <header className="station-header"><h2 id="station-title">SONG DISCOVERY</h2><span className="station-stamp">SELECTED SONG ONLY</span></header>
+    <div className="station-search-status">
       {(searched||searchError)&&<details className="song-results" open={searchResultsOpen} onToggle={e=>setSearchResultsOpen(e.currentTarget.open)}><summary>{searching?"Searching recordings…":"Choose a recording"}{matches.length>0?" · "+matches.length:""}</summary>
       <p role="status" className="station-meta">{searchNote}</p>
       {searchError&&<div role="alert" className="station-error"><p>{searchError}</p><button onClick={()=>void search(searched||query,limit)}>Retry search</button></div>}
@@ -210,6 +201,17 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
       <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Recommendations are based only on your selected song.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
       {finding&&<p className="station-meta" role="status">Checking live catalogs and credits independently. Available recommendations appear as soon as they arrive.</p>}
       {shown&&stationCatalog.some(t=>t.id===shown.track.id)&&<p className="station-meta">Source-checked starter collection · this connection was stored in advance, not found by a live lookup.</p>}
+    </div>
+    <div className="station-layout"><aside className="station-picker">
+      <span className="eyebrow">STARTING POINT</span>
+      {fromAlbum&&<a className="station-album-return" href={fromAlbum} onClick={event=>{
+        if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+        try{const ref=new URL(document.referrer);if(window.history.length>1&&ref.origin===window.location.origin&&ref.pathname+ref.search===fromAlbum){event.preventDefault();window.history.back();}}catch{}
+      }}>← Back to album</a>}
+      {origin?<div className="station-origin"><StationArtwork key={origin.id} track={origin} size="seed"/><div className="station-origin-copy"><h3>{origin.title}</h3><p className="station-artist">{artistLink(origin)}</p><p className="station-meta">{origin.album}</p><div className="station-feedback">{likeControl(origin)}</div><a className="source-link" href={trackYouTubeUrl(origin)} target="_blank" rel="noreferrer">Listen on YouTube ↗</a><small>One starting song. Its album and your saved likes are excluded.</small></div></div>:<div className="station-seed-empty"><div className="empty-record" aria-hidden="true"/><h3>SELECT A SONG</h3><p className="station-meta">Search above. Choose a recording to start discovering.</p></div>}
+      <div className="station-account">{!hydrated?<p className="station-meta">Checking sign-in…</p>:userId?<span>Signed in · {liked.length} liked {liked.length===1?"song":"songs"} · saved in this browser</span>:<span>Discover freely. Sign in only to like.</span>}<AccountButton returnTo={returnTo}/>{authError&&<div role="alert"><p>{authError}</p><button onClick={()=>void loadIdentity()}>Retry sign-in check</button></div>}</div>
+      {userId&&hydrated&&<a className="station-signin" href="#liked-songs">View your playlist</a>}
+    </aside><div className="station-output">
       {shown?<><article className="station-current" key={shown.track.id}><div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{shown.track.title}</h3><p className="station-artist">{artistLink(shown.track)}</p><p className="station-meta">{shown.track.album}</p><div className="station-tags">{[...new Set(shown.paths.map(p=>routeLabels[p.route]))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={shown.track.id+shown.track.album} track={shown.track} size="recommendation"/></div>
         <div className="station-actions"><a className="primary" href={trackYouTubeUrl(shown.track)} target="_blank" rel="noreferrer"><Play size={17}/>Listen on YouTube</a><button disabled={liking} onClick={()=>advance()}><SkipForward size={17}/>Next track</button></div>
         <div className="station-feedback">{likeControl(shown.track,shown)}<button disabled={liking} onClick={()=>advance("dislike")}><ThumbsDown size={16}/>Not for me</button><button disabled={liking} onClick={()=>void start(shown.track)}>Explore this song</button></div>

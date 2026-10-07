@@ -1,6 +1,7 @@
 /* Supplied musical artwork stays behind the discovery controls and lettering. */
 .search-main{position:relative;isolation:isolate;align-self:stretch;display:flex;flex-direction:column;justify-content:center;min-height:320px}
-.discovery-ornament{position:absolute;left:-38px;top:50%;transform:translateY(-50%);width:min(240px,52%);height:calc(100% + 12px);object-fit:contain;object-position:left center;opacity:.34;pointer-events:none;user-select:none;z-index:0}
+.discovery-ornament{position:absolute;left:-38px;top:50%;transform:translateY(-50%);width:min(240px,52%);height:calc(100% + 12px);object-fit:contain;object-position:left center;opacity:.10;pointer-events:none;user-select:none;z-index:0}
 .search-main>h1,.search-main>.search-form,.search-main>.suggestions{position:relative;z-index:1}
+.search-main>div{position:relative;z-index:1}
 .search-main>h1,.search-main>.suggestions{text-shadow:0 1px 4px #0c0c0d,0 0 5px #0c0c0d}
-@media(max-width:640px){.search-main{min-height:245px;padding-block:24px}.discovery-ornament{left:-10px;width:155px;height:260px;opacity:.26}}
+@media(max-width:640px){.search-main{min-height:245px;padding-block:24px}.discovery-ornament{left:-10px;width:155px;height:260px;opacity:.08}}
