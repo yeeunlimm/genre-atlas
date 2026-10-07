@@ -11,6 +11,8 @@ export async function collectLikedCandidates(liked:StationTrack[],lookup:(seed:S
   return {rows:mergeCandidates(rows),failed,total:jobs.length};
 }
 export function selectLikedPlaylist(rows:Candidate[],liked:StationTrack[],memory:Memory,recent:Record<string,number>,reviews:Map<string,ReviewSummary>,now=Date.now(),score?:(row:Candidate)=>number){
+  // Enforce the prerequisite in the selection layer too, not just the button.
+  if(!liked.length)return [];
   // The gate utility caps final lists at 10, so filter individually before ranking
   // and artist diversity; otherwise an ineligible top track could hide a good one.
   const filtered=rows.filter(row=>positiveReviewCandidates([{trackId:reviewKey(row.track)}],reviews,now).length>0);

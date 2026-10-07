@@ -85,3 +85,27 @@ Tests: `node scripts/test-review-sentiment.cjs`,
 
 Model sources: https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest
 and https://huggingface.co/Xenova/twitter-roberta-base-sentiment-latest .
+
+## Additional local batch, 2026-10-07
+
+Verified official channels/titles/descriptions with YouTube Data API before
+running the same model and rules. These are sampled English-text scores, not
+measured listener preference or manually validated song-review labels.
+
+| Recording / verified video | Comments fetched | Rule-eligible analysed | Positive / neutral / negative | Mean score |
+| --- | ---: | ---: | --- | ---: |
+| A$AP Rocky — Sundress / Ec3LoKpGJxY | 196 | 24 | 19 / 3 / 2 | 0.631195 |
+| Tame Impala — The Less I Know The Better / 2SUwOgmvzK4 | 194 | 24 | 19 / 2 / 3 | 0.591727 |
+| Radiohead — Creep / XFkzRNyygfk | 191 | 31 | 22 / 3 / 6 | 0.535525 |
+| PinkPantheress — Boy's a liar (not Pt. 2) / U_hj-wT3biU | 189 | 24 | 20 / 3 / 1 | 0.766683 |
+
+770 deduplicated comments fetched across four videos; 103 passed the explicit
+evaluation rules. Four sequential runs took about 8.2 seconds including process
+startup, using already downloaded model weights. Aggregate store now has five
+recordings including the preceding SKELETONS trial; raw text remains unsaved.
+
+Sentiment is exclusive to **Make a 10-track playlist**. Empty likes produce no
+candidate requests and no playlist, even if positive-scored candidates are passed
+directly to selection. Standard song discovery is unaffected and needs no likes.
+Regression tests cover both empty-like layers and sentiment import isolation.
+This batch does not enable production automation or remove its existing guard.
