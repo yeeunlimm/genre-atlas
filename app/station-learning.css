@@ -9,3 +9,8 @@
 .playlist-candidates .station-artwork{flex:0 0 clamp(56px,9vw,88px);width:clamp(56px,9vw,88px);align-self:center}
 .playlist-candidates .station-artwork-placeholder{font-size:10px;gap:4px;padding:4px}
 @media(max-width:480px){.playlist-candidates li{gap:10px}}
+.station-playlist li>.playlist-track-cover{flex:0 0 clamp(56px,9vw,88px);width:clamp(56px,9vw,88px);text-align:center}
+.playlist-track-cover .station-artwork{width:100%;margin:0;float:none}
+.playlist-track-cover .station-artwork-placeholder{font-size:10px;gap:4px;padding:4px}
+.playlist-track-cover a{display:flex;align-items:center;justify-content:center;min-height:44px;font-size:12px;color:#ddd}
+@media(max-width:480px){.playlist-selected-tracks li{gap:10px}}

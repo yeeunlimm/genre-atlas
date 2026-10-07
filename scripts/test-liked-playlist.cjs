@@ -68,6 +68,8 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  const component=fs.readFileSync('components/liked-playlist.tsx','utf8');
  assert.ok(component.includes('candidatesOpen&&<StationArtwork track={track} size="recommendation"/>'),'Each expanded candidate uses its own album artwork; closed details do not fetch covers.');
  assert.ok(component.includes('setCandidatesOpen(event.currentTarget.open)'));
+ assert.ok(component.includes('className="playlist-selected-tracks"'));
+ assert.ok(component.includes('<div className="playlist-track-cover"><StationArtwork track={r.track} size="recommendation"/>'),'Final selected playlist rows render their own artwork, independently of candidate expansion.');
  const artworkCss=fs.readFileSync('app/station-learning.css','utf8');
  assert.ok(artworkCss.includes('.playlist-candidates .station-artwork{flex:0 0 clamp(56px,9vw,88px)'));
  assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews',15000)"));
