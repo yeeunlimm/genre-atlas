@@ -1,5 +1,6 @@
 import {songKey,type Candidate} from "./hybrid-station";
 import type {StationTrack,Credit} from "./station-catalog";
+import {makePairSnapshot,readPairSnapshot,PAIR_FEATURE_NAMES,PAIR_FEATURE_VERSION,type PairSnapshot} from './seed-pair-features';
 
 // Versioned feature snapshots are captured BEFORE feedback. No audio/BPM inference.
 export const FEATURE_NAMES=[
@@ -12,7 +13,7 @@ export const FEATURE_NAMES=[
 ] as const;
 export const FEATURE_VERSION=1;
 export type Descriptor={artist:string;creators:string[]};
-export type Exposure={id:string;group:string;song:string;at:number;features:number[];descriptor:Descriptor;label:0|1|null;action:"shown"|"skip"|"like"|"dislike";ratedAt:number|null};
+export type Exposure={id:string;group:string;song:string;at:number;features:number[];descriptor:Descriptor;label:0|1|null;action:"shown"|"skip"|"like"|"dislike";ratedAt:number|null;seedPair?:PairSnapshot};
 export type LearningData={version:1;events:Exposure[]};
 export type RankModel={weights:number[];active:boolean;labels:number;positives:number;negatives:number;pairs:number;groups:number;holdoutAccuracy:number|null;message:string};
 export const emptyLearning=():LearningData=>({version:1,events:[]});
@@ -52,7 +53,7 @@ export function featureVector(row:Candidate,seeds:StationTrack[],data:LearningDa
  ];
 }
 export function makeExposure(row:Candidate,seeds:StationTrack[],data:LearningData,group:string,id:string,now=Date.now()):Exposure{
- return {id,group,song:songKey(row.track),at:now,features:featureVector(row,seeds,data,now),descriptor:describe(row.track),label:null,action:"shown",ratedAt:null};
+ return {id,group,song:songKey(row.track),at:now,features:featureVector(row,seeds,data,now),descriptor:describe(row.track),label:null,action:"shown",ratedAt:null,seedPair:makePairSnapshot(row,seeds)};
 }
 export function appendExposure(data:LearningData,event:Exposure):LearningData{
  return {...data,events:[...data.events.filter(e=>e.id!==event.id),event].slice(-1000)};
@@ -67,7 +68,7 @@ export function readLearning(raw:unknown):LearningData{
   (e.action==="like"?e.label===1:e.action==="dislike"?e.label===0:e.label===null)&&
   (e.label===null||e.ratedAt!==null)&&Array.isArray(e.features)&&e.features.length===FEATURE_NAMES.length&&e.features.every(n=>Number.isFinite(n)&&n>=0&&n<=1)&&
   Array.isArray(e.descriptor.creators)&&e.descriptor.creators.length<=100&&e.descriptor.creators.every(s=>typeof s==="string"&&s.length<500));
- return {version:1,events:[...new Map(events.map(e=>[e.id,e])).values()].sort((a,b)=>a.at-b.at)};
+ return {version:1,events:[...new Map(events.map(e=>[e.id,{...e,seedPair:readPairSnapshot(e.seedPair)}])).values()].sort((a,b)=>a.at-b.at)};
 }
 type Pair={delta:number[];weight:number};
 function grouped(events:Exposure[]):Exposure[][]{
@@ -103,5 +104,5 @@ export function trainRanker(data:LearningData):RankModel{
   message:active?"Experimental learned ranking is active on this browser. Scores order songs; they are not liking probabilities.":"Collecting explicit feedback. Learning needs 12 ratings, at least 3 likes and 3 dislikes, and 6 distinguishable comparisons across 2 starting-song sessions. Until then, source-based ranking is used."};
 }
 export function exportLearning(data:LearningData){
- return {format:"genre-atlas-ranking",version:1,featureVersion:FEATURE_VERSION,featureNames:FEATURE_NAMES,exportedAt:new Date().toISOString(),events:data.events};
+ return {format:"genre-atlas-ranking",version:1,featureVersion:FEATURE_VERSION,featureNames:FEATURE_NAMES,seedPairFeatureVersion:PAIR_FEATURE_VERSION,seedPairFeatureNames:PAIR_FEATURE_NAMES,exportedAt:new Date().toISOString(),events:data.events};
 }
