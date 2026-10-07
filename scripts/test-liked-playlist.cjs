@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const cache=new Map();
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const m={exports:{}};cache.set(file,m.exports);new Function('exports','module','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,m,id=>id.startsWith('.')?load(path.resolve(path.dirname(file),id+'.ts')):require(id));return m.exports;}
-const {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey}=load('lib/liked-playlist.ts');
+const {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey,PLAYLIST_CANDIDATE_LIMIT,PLAYLIST_TRACK_LIMIT}=load('lib/liked-playlist.ts');
 const {blankMemory,songKey}=load('lib/hybrid-station.ts');
 const {stationCatalog}=load('lib/station-catalog.ts');
 const seed=stationCatalog[0];
@@ -9,9 +9,13 @@ const track=(id,artist=id)=>({...seed,id,recordingId:id,title:id,artist,primaryA
 const row=(id,artist=id,confidence=.8)=>({track:track(id,artist),score:0,reasons:[],paths:[{route:'credits',seedId:seed.id,confidence}]});
 const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyzedAt:new Date(now).toISOString()});
 (async()=>{
- const rows=[row('no-score','same',.99),row('good','same',.8),row('bad'),row('zero'),row('stale'),row('recent'),row('disliked')];
+ assert.equal(PLAYLIST_CANDIDATE_LIMIT,20);assert.equal(PLAYLIST_TRACK_LIMIT,10);
+ const rows=[row('no-score','same',.99),row('good','same',.8),row('bad'),row('zero'),row('stale'),row('recent'),row('disliked'),row('no-evidence'),row('no-samples'),row('future')];
  const scores=new Map(rows.slice(1).map(r=>[reviewKey(r.track),summary(r.track.id==='bad'?-.5:r.track.id==='zero'?0:.5)]));
  scores.set(reviewKey(track('stale')),{...summary(.5),analyzedAt:new Date(now-86400000).toISOString()});
+ scores.set(reviewKey(track('no-evidence')),{...summary(.9),status:'no-evidence'});
+ scores.set(reviewKey(track('no-samples')),{...summary(.9),sampleCount:0});
+ scores.set(reviewKey(track('future')),{...summary(.9),analyzedAt:new Date(now+1).toISOString()});
  const memory=blankMemory();memory.votes[songKey(track('disliked'))]={vote:'dislike',routes:['credits'],at:now};
  const picked=selectLikedPlaylist(rows,[seed],memory,{[songKey(track('recent'))]:now},scores,now);
  assert.deepEqual(picked.map(r=>r.track.id),['good']); // gate BEFORE artist diversity
@@ -21,6 +25,31 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.equal(emptyLookups,0);assert.deepEqual(empty.rows,[]);
  const all=Array.from({length:15},(_,i)=>row('song'+i));
  assert.equal(selectLikedPlaylist(all,[seed],blankMemory(),{},new Map(all.map(r=>[reviewKey(r.track),summary(.2)])),now).length,10);
+ // All 20 are positive: higher sentiment wins even when preference is weaker.
+ const twenty=Array.from({length:20},(_,i)=>row('sentiment'+i,'sentiment-artist'+i,1-i*.02));
+ const positiveScores=new Map(twenty.map((r,i)=>[reviewKey(r.track),summary((i+1)/20)]));
+ const highest=selectLikedPlaylist(twenty,[seed],blankMemory(),{},positiveScores,now);
+ assert.deepEqual(highest.map(r=>r.track.id),twenty.slice(10).reverse().map(r=>r.track.id));
+ assert.ok(highest.every((r,i)=>!i||positiveScores.get(reviewKey(highest[i-1].track)).score>=positiveScores.get(reviewKey(r.track)).score));
+ // Artist diversity must run after sentiment order, not discard its winner first.
+ const sameArtist=[row('preference-winner','one-artist',.99),row('sentiment-winner','one-artist',.1)];
+ const sameScores=new Map(sameArtist.map((r,i)=>[reviewKey(r.track),summary(i?.9:.2)]));
+ assert.deepEqual(selectLikedPlaylist(sameArtist,[seed],blankMemory(),{},sameScores,now).map(r=>r.track.id),['sentiment-winner']);
+ // Equal sentiment keeps preference ranking, then a deterministic song-key tie.
+ const tied=[row('z-tie','z-artist',.7),row('a-tie','a-artist',.7),row('preferred','preferred-artist',.9)];
+ const tiedScores=new Map(tied.map(r=>[reviewKey(r.track),summary(.4)]));
+ assert.deepEqual(selectLikedPlaylist(tied,[seed],blankMemory(),{},tiedScores,now).map(r=>r.track.id),['preferred','a-tie','z-tie']);
+ assert.deepEqual(selectLikedPlaylist([...tied].reverse(),[seed],blankMemory(),{},tiedScores,now).map(r=>r.track.id),['preferred','a-tie','z-tie']);
+ assert.deepEqual(selectLikedPlaylist(tied,[seed],blankMemory(),{},tiedScores,now,r=>r.track.id==='z-tie'?2:1).map(r=>r.track.id),['z-tie','a-tie','preferred']);
+ // Existing liked recording / album exclusions still beat even perfect sentiment.
+ const sameRecording=row('liked-recording');sameRecording.track.recordingId=seed.recordingId;
+ const sameAlbum=row('liked-album');sameAlbum.track.albumFamily=seed.albumFamily||'shared-album';
+ const likedSeed={...seed,albumFamily:seed.albumFamily||'shared-album'};
+ const excludedRows=[{...row('already-liked'),track:likedSeed},sameRecording,sameAlbum,row('allowed')];
+ const exclusionScores=new Map(excludedRows.map(r=>[reviewKey(r.track),summary(1)]));
+ const before=JSON.stringify({rows:excludedRows,likes:[likedSeed],memory});
+ assert.deepEqual(selectLikedPlaylist(excludedRows,[likedSeed],memory,{},exclusionScores,now).map(r=>r.track.id),['allowed']);
+ assert.equal(JSON.stringify({rows:excludedRows,likes:[likedSeed],memory}),before);
  let calls=0;const progress=[];const result=await collectLikedCandidates([seed],async(s,route)=>{calls++;assert.equal(s.id,seed.id);if(route==='credits')throw new Error('fixture failure');return [row('live')];},new AbortController().signal,(done,total)=>progress.push([done,total]));
  assert.equal(calls,3);assert.equal(result.failed,1);assert.equal(result.rows.length,1);
  assert.deepEqual(progress,[[1,3],[2,3],[3,3]]);
@@ -30,7 +59,7 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.ok(component.indexOf("await json<ReviewAvailability>('/api/station/reviews',15000)")<component.indexOf('await collectLikedCandidates('));
  const pool=Array.from({length:40},(_,i)=>row('pool'+i,'artist'+i,.99-i*.01));
  const shortlist=shortlistLikedCandidates(pool,[seed],blankMemory(),{},now);
- assert.equal(shortlist.length,30);assert.deepEqual(shortlist.map(r=>r.track.id),pool.slice(0,30).map(r=>r.track.id));
+ assert.equal(shortlist.length,20);assert.deepEqual(shortlist.map(r=>r.track.id),pool.slice(0,20).map(r=>r.track.id));
  assert.deepEqual(shortlistLikedCandidates(pool,[],blankMemory(),{},now),[]);
  const sentiment=new Map(pool.map((r,i)=>[reviewKey(r.track),summary(i<6?-.3:.3)]));
  const ten=selectLikedPlaylist(shortlist,[seed],blankMemory(),{},sentiment,now);
@@ -48,5 +77,5 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.equal(reviewEligibility('Who is here in 2026?'),false);
  assert.equal(reviewEligibility('I love his jacket.'),false);
  assert.equal(reviewEligibility('노래 좋아요'),false);
- console.log('PASS: independent liked candidate fetch, positive-only gate before diversity, missing/zero/negative/stale/recent/dislike exclusions, cap, partial errors, cancellation, relevance rules.');
+ console.log('PASS: fixed 20-candidate shortlist, sentiment-descending positive top 10, preference/key ties, post-sentiment artist diversity, liked recording/album and evidence exclusions, unchanged likes, partial errors, cancellation, relevance rules.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

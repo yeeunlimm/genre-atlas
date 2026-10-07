@@ -21,11 +21,11 @@ const request=(tracks=[{title:'song',artist:'artist'}],origin='https://test.inva
   assert.equal((await POST(request())).status,401);
   signedIn=true;
   assert.equal((await POST(request(undefined,'https://evil.invalid'))).status,403);
-  for(const invalid of [[],Array.from({length:31},(_,i)=>({title:String(i),artist:'a'})),[{title:' ',artist:'a'}],[{title:'a',artist:'a',durationMs:NaN}],[{title:'a',artist:'a'},{title:'a',artist:'a'}]]){
-   const rejected=await POST(request(invalid));assert.equal(rejected.status,400);assert.ok((await rejected.json()).error.includes('1 and 30'));
+  for(const invalid of [[],Array.from({length:21},(_,i)=>({title:String(i),artist:'a'})),[{title:' ',artist:'a'}],[{title:'a',artist:'a',durationMs:NaN}],[{title:'a',artist:'a'},{title:'a',artist:'a'}]]){
+   const rejected=await POST(request(invalid));assert.equal(rejected.status,400);assert.ok((await rejected.json()).error.includes('1 and 20'));
   }
   const status=await GET(new Request('https://test.invalid/api/station/reviews'));
-  assert.equal(status.status,200);const availability=await status.json();assert.equal(availability.ready,false);assert.equal(availability.candidateLimit,30);assert.equal(availability.playlistLimit,10);
+  assert.equal(status.status,200);const availability=await status.json();assert.equal(availability.ready,false);assert.equal(availability.candidateLimit,20);assert.equal(availability.playlistLimit,10);
   assert.equal((await POST(request())).status,503);assert.equal(analyseCalls,0);
   process.env.YOUTUBE_DERIVED_METRICS_APPROVED='true';
   process.env.YOUTUBE_API_KEY=' \t\n ';
@@ -36,23 +36,23 @@ const request=(tracks=[{title:'song',artist:'artist'}],origin='https://test.inva
   assert.equal((await (await GET(new Request('https://test.invalid/api/station/reviews'))).json()).ready,true);
   process.env.YOUTUBE_DERIVED_METRICS_APPROVED='false';
   assert.equal((await (await GET(new Request('https://test.invalid/api/station/reviews'))).json()).ready,true);
-  // Thirty tracks with ordinary metadata at every supported field-length limit
+  // Twenty tracks with ordinary metadata at every supported field-length limit
   // must fit the existing request body guard, without increasing that guard.
-  const candidates=Array.from({length:30},(_,i)=>({title:((i<4?'negative':'positive')+i).padEnd(300,'t'),artist:('artist'+i).padEnd(300,'a'),primaryArtistName:('primary'+i).padEnd(300,'p'),durationMs:180000}));
+  const candidates=Array.from({length:20},(_,i)=>({title:((i<4?'negative':'positive')+i).padEnd(300,'t'),artist:('artist'+i).padEnd(300,'a'),primaryArtistName:('primary'+i).padEnd(300,'p'),durationMs:180000}));
   assert.ok(JSON.stringify({tracks:candidates}).length<=30000);
   const response=await POST(request(candidates));assert.equal(response.status,200);
   assert.equal(response.headers.get('cache-control'),'private, no-store');
   assert.ok(response.headers.get('content-type').includes('ndjson'));
   const events=[];await readReviewStream(response,e=>events.push(e),new AbortController().signal);
-  assert.equal(analyseCalls,30);assert.equal(events.filter(e=>e.type==='progress').length,30);
-  assert.equal(events.at(-1).type,'complete');assert.equal(events.at(-1).total,30);
+  assert.equal(analyseCalls,20);assert.equal(events.filter(e=>e.type==='progress').length,20);
+  assert.equal(events.at(-1).type,'complete');assert.equal(events.at(-1).total,20);
   assert.equal(events[0].result.summary.score,-.4);
   assert.equal((await POST(request())).status,429);
   accountId='another-test-user';delete process.env.YOUTUBE_DERIVED_METRICS_APPROVED;
   const withoutApproval=await POST(request());assert.equal(withoutApproval.status,200);
   const additional=[];await readReviewStream(withoutApproval,e=>additional.push(e),new AbortController().signal);
-  assert.equal(analyseCalls,31);assert.equal(additional.at(-1).type,'complete');assert.equal(additional.at(-1).total,1);
+  assert.equal(analyseCalls,21);assert.equal(additional.at(-1).type,'complete');assert.equal(additional.at(-1).total,1);
   failAuth=true;const failed=await GET(new Request('https://test.invalid/api/station/reviews'));assert.equal(failed.status,503);assert.ok(!(await failed.text()).includes('private auth error'));
-  console.log('PASS: authenticated 30-track stream with full-length metadata, 31-track rejection, shared availability limits, request validation, origin, missing/blank-key no analysis, absent/false legacy approval does not block, private response, throttling and auth outage. Mock auth/model only.');
+  console.log('PASS: authenticated 20-track stream with full-length metadata, 21-track rejection, shared availability limits, request validation, origin, missing/blank-key no analysis, absent/false legacy approval does not block, private response, throttling and auth outage. Mock auth/model only.');
  }finally{for(const [key,value] of [['YOUTUBE_API_KEY',oldKey],['YOUTUBE_DERIVED_METRICS_APPROVED',oldApproval]])if(value===undefined)delete process.env[key];else process.env[key]=value;}
 })().catch(e=>{console.error(e);process.exitCode=1;});

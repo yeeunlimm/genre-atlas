@@ -108,7 +108,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
           result: {
             key: playlistLogic.reviewKey(track), status: 'ready',
             summary: {
-              status: 'ready', score: number < 5 ? -.4 : number === 5 ? 0 : .4,
+              status: 'ready', score: number < 5 ? -.4 : number === 5 ? 0 : number / 40,
               sampleCount: 3, analyzedAt: new Date().toISOString(),
             },
           },
@@ -185,13 +185,13 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
     const posts = ready.requests.filter(request => request.method === 'POST');
     assert.equal(posts.length, 1);
     assert.equal(posts[0].url, '/api/station/reviews');
-    assert.equal(posts[0].body.tracks.length, 30);
+    assert.equal(posts[0].body.tracks.length, 20);
     assert.equal(ready.events.at(-1), 'POST /api/station/reviews');
     const selected = ready.states[0], shortlist = ready.states[1];
-    assert.equal(shortlist.length, 30);
-    assert.equal(Object.keys(ready.states[2]).length, 30);
+    assert.equal(shortlist.length, 20);
+    assert.equal(Object.keys(ready.states[2]).length, 20);
     assert.equal(selected.length, 10);
-    assert.deepEqual(selected.map(row => row.track.title), Array.from({length: 10}, (_, i) => 'Song ' + (i + 6)));
+    assert.deepEqual(selected.map(row => row.track.title), Array.from({length: 10}, (_, i) => 'Song ' + (19 - i)));
     assert.ok(selected.every(row => shortlist.some(candidate => candidate.track.id === row.track.id)));
     assert.equal(new Set(selected.map(row => row.track.artistId)).size, 10);
     assert.equal(ready.states[5], '');
@@ -214,7 +214,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
       assert.equal(reviewAvailability({...config, YOUTUBE_API_KEY: ' \t\n '}).ready, false);
       assert.equal(reviewAvailability({...config, YOUTUBE_API_KEY: 'fixture-key'}).ready, true);
     }
-    console.log('PASS: real playlist button checks readiness before collecting; unavailable/no-likes do not collect, analyse or write history; ready flow shortlists 40 to 30, checks all 30 and keeps only 10 strictly positive candidates; likes unchanged; missing/blank keys rejected regardless of legacy approval; key enables analysis with absent/false legacy approval. All API/comment/model data are mocked.');
+    console.log('PASS: real playlist button checks readiness before collecting; unavailable/no-likes do not collect, analyse or write history; ready flow shortlists 40 to 20, checks all 20 and keeps the 10 highest strictly positive scores; likes unchanged; missing/blank keys rejected regardless of legacy approval; key enables analysis with absent/false legacy approval. All API/comment/model data are mocked.');
   } finally {
     global.fetch = originalFetch;
   }

@@ -2,6 +2,10 @@
 export type YouTubeComment = {id:string;text:string};
 export type CommentBatch = {status:"ready"|"empty"|"disabled";comments:YouTubeComment[];hasMore:boolean};
 export const REVIEW_COMMENT_LIMIT=50;
+// Distinguish a missing recording from an account-wide quota/provider failure.
+export class YouTubeCommentError extends Error {
+  constructor(public kind:'quota'|'video-unavailable'|'provider',message:string){super(message);}
+}
 
 export async function youtubeReviewComments(videoId:string, apiKey:string, request:typeof fetch=fetch):Promise<CommentBatch> {
   if (!/^[\w-]{11}$/.test(videoId)) throw new Error("Invalid YouTube video ID.");
@@ -13,17 +17,18 @@ export async function youtubeReviewComments(videoId:string, apiKey:string, reque
   const query=new URLSearchParams({part:"snippet",videoId,maxResults:String(REVIEW_COMMENT_LIMIT),order:"relevance",textFormat:"plainText",fields:"items(id,snippet(topLevelComment(snippet(textDisplay)))),nextPageToken"});
   let response:Response;
   try { response=await request("https://www.googleapis.com/youtube/v3/commentThreads?"+query,{headers:{"X-Goog-Api-Key":apiKey},signal:AbortSignal.timeout(15000),cache:"no-store"}); }
-  catch { throw new Error("YouTube comments request timed out or could not connect."); }
+  catch { throw new YouTubeCommentError('provider',"YouTube comments request timed out or could not connect."); }
   let body:any;
-  try { body=await response.json(); } catch { throw new Error("YouTube returned an invalid response."); }
+  try { body=await response.json(); } catch { throw new YouTubeCommentError('provider',"YouTube returned an invalid response."); }
   if (!response.ok) {
     const reasons=(body.error?.errors||[]).map((e:{reason?:string})=>e.reason);
     if (reasons.includes("commentsDisabled")) return {status:"disabled",comments:[],hasMore:false};
     // Never log provider error messages, request headers or URLs with credentials.
-    if (reasons.includes("quotaExceeded")) throw new Error("YouTube daily quota exhausted.");
-    throw new Error("YouTube comment lookup failed (HTTP "+response.status+").");
+    if (reasons.some((reason:string)=>['quotaExceeded','dailyLimitExceeded'].includes(reason))) throw new YouTubeCommentError('quota',"YouTube daily quota exhausted.");
+    if (reasons.includes('videoNotFound')) throw new YouTubeCommentError('video-unavailable','The matched recording is unavailable.');
+    throw new YouTubeCommentError('provider',"YouTube comment lookup failed (HTTP "+response.status+").");
   }
-  if (!Array.isArray(body.items)) throw new Error("YouTube comments payload is invalid.");
+  if (!Array.isArray(body.items)) throw new YouTubeCommentError('provider',"YouTube comments payload is invalid.");
   const hasMore=Boolean(body.nextPageToken);
   for (const item of body.items) {
     const id=item.id,text=item.snippet?.topLevelComment?.snippet?.textDisplay;

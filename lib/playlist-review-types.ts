@@ -7,6 +7,7 @@ export type TrackReview={
   summary?:ReviewSummary;
   videoId?:string;
   videoTitle?:string;
+  videosChecked?:number;
   reason?:string;
 };
 export type ReviewEvent=

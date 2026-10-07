@@ -9,11 +9,11 @@ function seconds(duration:string){const m=/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.
 
 // Conservative metadata match, not a claim that a channel is YouTube-verified.
 // A song/artist mention in an unrelated uploader's title is not enough.
-export function matchReviewVideo(track:ReviewTrack,videos:ReviewVideo[]):ReviewVideo|null{
+export function matchReviewVideos(track:ReviewTrack,videos:ReviewVideo[]):ReviewVideo[]{
   const artist=track.primaryArtistName||track.artist;
   const channelArtist=compact(artist);
   const title=normalize(track.title);
-  if(!channelArtist||!title)return null;
+  if(!channelArtist||!title)return [];
   const matches=videos.filter(v=>{
     if(!/^[\w-]{11}$/.test(v.id)||v.snippet.categoryId!=='10')return false;
     const channel=compact(v.snippet.channelTitle.replace(/(?:\s*-\s*topic|vevo|official)\s*$/i,''));
@@ -30,20 +30,34 @@ export function matchReviewVideo(track:ReviewTrack,videos:ReviewVideo[]):ReviewV
     return true;
   });
   // Prefer a Topic/official audio recording over a music video with a long intro.
-  return matches.sort((a,b)=>Number(/topic|official audio/i.test(b.snippet.channelTitle+' '+b.snippet.title))-Number(/topic|official audio/i.test(a.snippet.channelTitle+' '+a.snippet.title)))[0]||null;
+  return matches.sort((a,b)=>Number(/topic|official audio/i.test(b.snippet.channelTitle+' '+b.snippet.title))-Number(/topic|official audio/i.test(a.snippet.channelTitle+' '+a.snippet.title)))
+    .filter((video,index,all)=>all.findIndex(other=>other.id===video.id)===index);
 }
+export function matchReviewVideo(track:ReviewTrack,videos:ReviewVideo[]):ReviewVideo|null{return matchReviewVideos(track,videos)[0]||null;}
 
 export class ReviewProviderError extends Error { constructor(public kind:'quota'|'provider'){super(kind==='quota'?'YouTube request quota is exhausted. Try again after it resets.':'YouTube lookup is unavailable. Try again later.');} }
-export async function findReviewVideo(track:ReviewTrack,key:string,signal:AbortSignal,request:typeof fetch=fetch){
+export async function findReviewVideos(track:ReviewTrack,key:string,signal:AbortSignal,request:typeof fetch=fetch,format:'audio'|'video'='audio'){
   async function get(resource:string,params:Record<string,string>){
-    const response=await request('https://www.googleapis.com/youtube/v3/'+resource+'?'+new URLSearchParams(params),{headers:{'X-Goog-Api-Key':key},cache:'no-store',signal:AbortSignal.any([signal,AbortSignal.timeout(15000)])});
-    const body=await response.json() as {error?:{errors?:{reason:string}[]};items?:unknown[]};
-    if(!response.ok)throw new ReviewProviderError(body.error?.errors?.some((e:{reason:string})=>e.reason==='quotaExceeded')?'quota':'provider');
-    return body;
+    signal.throwIfAborted();
+    try{
+      const response=await request('https://www.googleapis.com/youtube/v3/'+resource+'?'+new URLSearchParams(params),{headers:{'X-Goog-Api-Key':key},cache:'no-store',signal:AbortSignal.any([signal,AbortSignal.timeout(15000)])});
+      const body=await response.json() as {error?:{errors?:{reason:string}[]};items?:unknown[]};
+      signal.throwIfAborted();
+      if(!body||typeof body!=='object'||Array.isArray(body)||(body.items!==undefined&&!Array.isArray(body.items)))throw new ReviewProviderError('provider');
+      if(!response.ok)throw new ReviewProviderError(body.error?.errors?.some((e:{reason:string})=>['quotaExceeded','dailyLimitExceeded'].includes(e.reason))?'quota':'provider');
+      return body;
+    }catch(error){
+      signal.throwIfAborted();
+      if(error instanceof ReviewProviderError)throw error;
+      // A transport/JSON failure affects the lookup provider, not this song.
+      // Use the typed error so the stream stops its remaining candidate calls.
+      throw new ReviewProviderError('provider');
+    }
   }
-  const search=await get('search',{part:'snippet',type:'video',videoCategoryId:'10',maxResults:'5',q:track.artist+' '+track.title+' official audio',fields:'items(id/videoId)'});
+  const search=await get('search',{part:'snippet',type:'video',videoCategoryId:'10',maxResults:'5',q:(track.primaryArtistName||track.artist)+' '+track.title+' official '+format,fields:'items(id/videoId)'});
   const ids=(search.items||[]).map(v=>(v as {id?:{videoId?:string}})?.id?.videoId).filter((id:unknown)=>typeof id==='string'&&/^[\w-]{11}$/.test(id)).slice(0,5);
-  if(!ids.length)return null;
+  if(!ids.length)return [];
   const videos=await get('videos',{part:'snippet,contentDetails',id:ids.join(','),fields:'items(id,snippet(title,channelTitle,categoryId),contentDetails(duration))'});
-  return matchReviewVideo(track,(Array.isArray(videos.items)?videos.items:[]) as ReviewVideo[]);
+  return matchReviewVideos(track,(Array.isArray(videos.items)?videos.items:[]) as ReviewVideo[]);
 }
+export async function findReviewVideo(track:ReviewTrack,key:string,signal:AbortSignal,request:typeof fetch=fetch){return (await findReviewVideos(track,key,signal,request))[0]||null;}

@@ -70,7 +70,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       const now=Date.now();recent.current=Object.fromEntries(Object.entries(recent.current).filter(([,at])=>Number.isFinite(at)&&at>now-3*86400000&&at<=now));
       for(const row of selection)recent.current[songKey(row.track)]=now;
       let saved=true;try{localStorage.setItem(storageKey,JSON.stringify({recent:recent.current}));}catch{saved=false;}
-      setNote(candidates.length+' candidates checked → '+selection.length+' tracks selected with sentiment > 0. '+(result.failed?result.failed+' candidate sources failed. ':'')+(saved?'':'Repeat history could not be saved.'));
+      setNote(candidates.length+' candidates checked → '+selection.length+' tracks selected, highest positive sentiment first. '+(result.failed?result.failed+' candidate sources failed. ':'')+(saved?'':'Repeat history could not be saved.'));
     }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'Playlist creation failed.');setNote('');}}
     finally{if(controller.current===c){controller.current=null;setBusy(false);}}
   }
@@ -78,13 +78,13 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
   const selected=new Set(playlist?.map(row=>reviewKey(row.track))||[]);
   function reviewLabel(result?:TrackReview){
     if(!result)return 'Not analysed';
-    if(result.status==='ready'&&result.summary?.score!==null&&result.summary?.score!==undefined)return (result.summary.score>0?'Positive':'Not positive')+' · '+result.summary.score.toFixed(3)+' · '+result.summary.sampleCount+' comments';
+    if(result.status==='ready'&&result.summary?.score!==null&&result.summary?.score!==undefined)return (result.summary.score>0?'Positive':'Not positive')+' · '+result.summary.score.toFixed(3)+' · '+result.summary.sampleCount+' comments'+(result.videosChecked&&result.videosChecked>1?' · matched video retry':'');
     return result.reason||'No usable comment evidence';
   }
   return <section className="station-playlist" aria-label="Playlist from my likes" aria-busy={busy}>
     <h3>Playlist from your likes</h3>
-    <p>Your likes → up to {PLAYLIST_CANDIDATE_LIMIT} recommended candidates → YouTube comment sentiment → up to 10 tracks.</p>
-    <p>Only scores above zero pass. One song per artist. Separate from song discovery.</p>
+    <p>Your likes → up to {PLAYLIST_CANDIDATE_LIMIT} recommended candidates → the 10 highest positive comment-sentiment scores.</p>
+    <p>Scores must be above zero. Fewer than 10 may qualify. One song per artist. Separate from song discovery.</p>
     <div className="playlist-build-actions"><button disabled={busy||!liked.length} onClick={()=>void build()}>{busy?'Building your personal playlist…':'Make a 10-track playlist'}</button>{busy&&<button onClick={cancel}>Cancel</button>}</div>
     {!liked.length&&<p>Like at least one song to start.</p>}
     <p role="status" aria-atomic="true">{note}</p>{error&&<p role="alert">{error}</p>}
@@ -92,6 +92,6 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div></li>;})}</ol>
     </details>}
     {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates passed all checks. No unanalysed or non-positive songs were added to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
-    <small>Up to 50 comments per video. Experimental English-model scoring and optional Korean-dictionary scoring, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
+    <small>Up to 50 comments per video. If comments are disabled or absent, another matching video is tried (up to three total). Experimental English-model scoring and optional Korean-dictionary scoring, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
   </section>;
 }

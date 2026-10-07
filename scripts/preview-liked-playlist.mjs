@@ -15,8 +15,8 @@ const usage = `Local explicit-seed playlist trial (not an account test).
   node scripts/preview-liked-playlist.mjs --artist "Tame Impala" --title "Let It Happen" --album "Currents"
 
 Requires YOUTUBE_API_KEY in the process environment. LASTFM_API_KEY is optional.
-Uses up to five explicit seeds, actual recommendation sources, up to 30 candidate
-analyses and the production positive-only selection (up to 10 songs).
+Uses up to five explicit seeds, actual recommendation sources, up to 20 candidate
+analyses and the production highest-positive-sentiment selection (up to 10 songs).
 Stores aggregate metadata only in a new, ignored work/live-playlist-*.json file.
 No account data, saved likes, learned preferences or repeat history are loaded.
 `;
@@ -181,6 +181,7 @@ async function main() {
     assert.ok(wanted.has(reviewKey(row.track)));
     assert.ok(summaries.get(reviewKey(row.track))?.score > 0, 'Every selected song must have actual positive evidence.');
   }
+  assert.ok(selected.every((row, index) => index === 0 || summaries.get(reviewKey(selected[index - 1].track)).score >= summaries.get(reviewKey(row.track)).score), 'Final tracks must be ordered by descending sentiment score.');
   const statusCounts = {};
   for (const result of reviews.values()) statusCounts[result.status] = (statusCounts[result.status] || 0) + 1;
   const selectedKeys = new Set(selected.map(row => reviewKey(row.track)));
@@ -198,7 +199,7 @@ async function main() {
       const result = reviews.get(reviewKey(row.track));
       return {...metadata(row.track), recommendationScore: row.score, paths: row.paths,
         selected: selectedKeys.has(reviewKey(row.track)),
-        review: result ? {status: result.status, ...(result.summary ? {summary: result.summary} : {}),
+        review: result ? {status: result.status, videosChecked: result.videosChecked, ...(result.reason ? {reason: result.reason} : {}), ...(result.summary ? {summary: result.summary} : {}),
           ...(result.videoId && /^[\w-]{11}$/.test(result.videoId) ? {videoId: result.videoId, videoUrl: 'https://www.youtube.com/watch?v=' + result.videoId, videoTitle: result.videoTitle} : {})} : null};
     }),
     selected: selected.map(row => ({...metadata(row.track), score: summaries.get(reviewKey(row.track)).score})),
