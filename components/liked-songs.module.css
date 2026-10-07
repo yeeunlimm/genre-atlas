@@ -34,5 +34,5 @@
 .arcStage{max-width:460px;aspect-ratio:1.12;overflow:hidden;margin-block:16px}
 .arcStage .record{display:none}
 .arcStage .label{display:none}
-.arcStage .cover{width:15%;min-width:44px;background:transparent;box-shadow:2px 5px 12px #0008}
+.arcStage .cover{width:15%;min-width:44px;padding:0!important;border:0!important;background:transparent;box-shadow:2px 5px 12px #0008}
 .arcStage .covers{inset:0 0 0 8%}
