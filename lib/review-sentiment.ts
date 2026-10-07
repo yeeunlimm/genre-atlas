@@ -16,6 +16,24 @@ export type ReviewSummary = {
   methodCounts?: Partial<Record<ReviewMethod, number>>;
 };
 
+// Selection policy only: this is NOT a measured neutral sentiment score.
+export type NoCommentsFallback = {
+  status:'no-comments'; score:0; sampleCount:0; checkedAt:string;
+  videosChecked:number; disabled:number; empty:number;
+};
+export type PlaylistReviewEvidence = ReviewSummary | NoCommentsFallback;
+export function playlistSelectionScore(evidence:PlaylistReviewEvidence|undefined,now=Date.now()):number|null {
+  if(!evidence)return null;
+  if(evidence.status==='no-comments'){
+    const age=now-Date.parse(evidence.checkedAt);
+    return evidence.score===0&&evidence.sampleCount===0&&Number.isFinite(age)&&age>=0&&age<3600000&&
+      Number.isInteger(evidence.videosChecked)&&evidence.videosChecked>=1&&evidence.videosChecked<=3&&
+      Number.isInteger(evidence.disabled)&&evidence.disabled>=0&&Number.isInteger(evidence.empty)&&evidence.empty>=0&&
+      evidence.disabled+evidence.empty===evidence.videosChecked?0:null;
+  }
+  return positiveReviewCandidates([{trackId:'check'}],new Map([['check',evidence]]),now).length?evidence.score:null;
+}
+
 // Keep lexicon scores distinct from model probabilities; average signed scores
 // only after validation. This is a heuristic gate, not a calibrated probability.
 export function summarizeScoredReviews(rows:ScoredReview[], now=new Date()):ReviewSummary {

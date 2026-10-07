@@ -19,6 +19,17 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  const memory=blankMemory();memory.votes[songKey(track('disliked'))]={vote:'dislike',routes:['credits'],at:now};
  const picked=selectLikedPlaylist(rows,[seed],memory,{[songKey(track('recent'))]:now},scores,now);
  assert.deepEqual(picked.map(r=>r.track.id),['good']); // gate BEFORE artist diversity
+ const fallback={status:'no-comments',score:0,sampleCount:0,checkedAt:new Date(now).toISOString(),videosChecked:2,disabled:1,empty:1};
+ const fallbackRows=[row('fallback'),row('positive'),row('neutral'),row('failed'),row('expired'),row('invalid'),row('future-fallback')];
+ const fallbackScores=new Map(fallbackRows.map(r=>[reviewKey(r.track),fallback]));
+ fallbackScores.set(reviewKey(track('positive')),summary(.01));
+ fallbackScores.set(reviewKey(track('neutral')),summary(0));
+ fallbackScores.set(reviewKey(track('failed')),{...summary(0),status:'no-evidence',sampleCount:0});
+ fallbackScores.set(reviewKey(track('expired')),{...fallback,checkedAt:new Date(now-3600000).toISOString()});
+ fallbackScores.set(reviewKey(track('invalid')),{...fallback,empty:0});
+ fallbackScores.set(reviewKey(track('future-fallback')),{...fallback,checkedAt:new Date(now+1).toISOString()});
+ assert.deepEqual(selectLikedPlaylist(fallbackRows,[seed],blankMemory(),{},fallbackScores,now).map(r=>r.track.id),['positive','fallback']);
+ assert.deepEqual(selectLikedPlaylist(fallbackRows,[],blankMemory(),{},fallbackScores,now),[]);
  assert.deepEqual(selectLikedPlaylist(rows,[],memory,{},scores,now),[]);
  let emptyLookups=0;
  const empty=await collectLikedCandidates([],async()=>{emptyLookups++;return rows;},new AbortController().signal);

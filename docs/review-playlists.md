@@ -1,6 +1,6 @@
 # Review-filtered playlists: implementation boundary
 
-## Current flow: 20 candidates → highest positive sentiment → at most 10 (2026-10-07)
+## Current flow: 20 candidates → positives first, no-comment zeros next → at most 10 (2026-10-07)
 
 - Check server comment-analysis readiness before fetching candidates. If it is
   unavailable, report the reason immediately without collecting candidates,
@@ -28,10 +28,18 @@
   English music evaluations use the pinned pretrained model; Korean evaluations
   can use the optional user dictionary and explicit music-context rules.
   Raw comments stay in server memory only. Then proceed to the next candidate.
-- After all candidates are checked, retain scores strictly >0 and sort by
-  sentiment score descending. Preference score is only a tie-breaker; preserve
+- After all candidates are checked, retain measured scores strictly >0 and sort by
+  sentiment score descending. Only when every strictly matched video checked
+  (up to three, not every video on YouTube) has comments disabled or empty,
+  permit a separate `selectionFallback` with selection score 0. This is not a
+  measured neutral score: no summary or analysis sample is fabricated. Positive
+  measured scores precede these fallback songs; fallback eligibility expires in
+  one hour. No match, missing video, quota/network/model error, unsupported or
+  irrelevant comments, measured neutral and negative scores remain excluded.
+  Preference score is only a tie-breaker; preserve
   one song per artist and select at most 10. Return fewer when necessary, with
   per-candidate scores/sample counts/source links and explicit exclusion reasons.
+  Both candidate and selected-song lists label the exception as not analysed.
 - The client supports cancellation and ignores stale work after an account/likes
   change. A truncated stream never produces a final playlist or saves repeats.
 - A 24-hour warm-process score cache avoids repeat inference when available. It

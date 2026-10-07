@@ -4,7 +4,7 @@ import type {StationTrack} from '@/lib/station-catalog';
 import {songKey,type Candidate,type Memory} from '@/lib/hybrid-station';
 import {collectLikedCandidates,shortlistLikedCandidates,selectLikedPlaylist,reviewKey,PLAYLIST_CANDIDATE_LIMIT} from '@/lib/liked-playlist';
 import {featureVector,modelScore,trainRanker,type LearningData} from '@/lib/station-learning';
-import type {ReviewSummary} from '@/lib/review-sentiment';
+import type {PlaylistReviewEvidence} from '@/lib/review-sentiment';
 import type {TrackReview,ReviewAvailability} from '@/lib/playlist-review-types';
 import {readReviewStream} from '@/lib/read-review-stream';
 import {trackYouTubeUrl} from '@/lib/discovery-station';
@@ -52,7 +52,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       if(!candidates.length)throw new Error(result.failed?'Candidate sources could not provide new songs. Retry later.':'No new connected candidates were found for your likes. Try adding another liked song.');
       setShortlist(candidates);
       setNote('Analysing YouTube comments · 0 / '+candidates.length+'. The first model load can take longer.');
-      const summaries=new Map<string,ReviewSummary>(),checked=new Set<string>(),wanted=new Set(candidates.map(r=>reviewKey(r.track)));
+      const summaries=new Map<string,PlaylistReviewEvidence>(),checked=new Set<string>(),wanted=new Set(candidates.map(r=>reviewKey(r.track)));
       const response=await accountFetch('/api/station/reviews',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([c.signal,AbortSignal.timeout(270000)]),body:JSON.stringify({tracks:candidates.map(({track:t})=>({title:t.title,artist:t.artist,primaryArtistName:t.primaryArtistName,durationMs:t.durationMs}))})});
       await readReviewStream(response,event=>{
         if(event.type==='heartbeat')return;
@@ -61,6 +61,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
         if(!row||!wanted.has(row.key)||checked.has(row.key)||event.total!==candidates.length||event.completed!==checked.size+1)throw new Error('Invalid candidate analysis response.');
         checked.add(row.key);
         if(row.status==='ready'&&row.summary)summaries.set(row.key,row.summary);
+        else if(row.selectionFallback)summaries.set(row.key,row.selectionFallback);
         setReviews(old=>({...old,[row.key]:row}));setNote('Analysing YouTube comments · '+checked.size+' / '+candidates.length);
       },c.signal);
       c.signal.throwIfAborted();
@@ -78,20 +79,21 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
   const selected=new Set(playlist?.map(row=>reviewKey(row.track))||[]);
   function reviewLabel(result?:TrackReview){
     if(!result)return 'Not analysed';
+    if(result.selectionFallback)return 'No comments · selection fallback 0 · not analysed';
     if(result.status==='ready'&&result.summary?.score!==null&&result.summary?.score!==undefined)return (result.summary.score>0?'Positive':'Not positive')+' · '+result.summary.score.toFixed(3)+' · '+result.summary.sampleCount+' comments'+(result.videosChecked&&result.videosChecked>1?' · matched video retry':'');
     return result.reason||'No usable comment evidence';
   }
   return <section className="station-playlist" aria-label="Playlist from my likes" aria-busy={busy}>
     <h3>Playlist from your likes</h3>
-    <p>Your likes → up to {PLAYLIST_CANDIDATE_LIMIT} recommended candidates → the 10 highest positive comment-sentiment scores.</p>
-    <p>Scores must be above zero. Fewer than 10 may qualify. One song per artist. Separate from song discovery.</p>
+    <p>Your likes → up to {PLAYLIST_CANDIDATE_LIMIT} recommended candidates → up to 10 tracks, positive sentiment first.</p>
+    <p>If every matched video checked has no comments or has comments disabled, the song may follow with a selection score of 0 (not analysed). Other failures and non-positive analysed songs stay out. One song per artist. Separate from song discovery.</p>
     <div className="playlist-build-actions"><button disabled={busy||!liked.length} onClick={()=>void build()}>{busy?'Building your personal playlist…':'Make a 10-track playlist'}</button>{busy&&<button onClick={cancel}>Cancel</button>}</div>
     {!liked.length&&<p>Like at least one song to start.</p>}
     <p role="status" aria-atomic="true">{note}</p>{error&&<p role="alert">{error}</p>}
     {shortlist.length>0&&<details className="playlist-candidates"><summary>Candidates · {shortlist.length} · Comments checked {Object.keys(reviews).length}/{shortlist.length}</summary>
       <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div></li>;})}</ol>
     </details>}
-    {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates passed all checks. No unanalysed or non-positive songs were added to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
+    {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates qualified. Unmatched recordings and analysis errors were not used to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small><small>{reviewLabel(reviews[reviewKey(r.track)])}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
     <small>Up to 50 comments per video. If comments are disabled or absent, another matching video is tried (up to three total). Experimental English-model scoring and optional Korean-dictionary scoring, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
   </section>;
 }

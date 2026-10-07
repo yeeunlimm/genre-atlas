@@ -45,6 +45,12 @@ async function run(config,verify){const h=harness(config);global.fetch=h.request
   const oldFetch=global.fetch,oldKey=process.env.YOUTUBE_API_KEY;
   process.env.YOUTUBE_API_KEY='fixture-secret';
   try{
+    for(const batches of [{[id(1)]:'disabled',[id(2)]:'empty'},{[id(1)]:'empty',[id(2)]:'empty'},{[id(1)]:'disabled',[id(2)]:'disabled'}]){
+      await run({batches},(r,h)=>{assert.equal(r.summary,undefined);assert.equal(r.selectionFallback.score,0);assert.equal(r.selectionFallback.sampleCount,0);assert.equal(r.selectionFallback.videosChecked,2);assert.equal(r.selectionFallback.disabled+r.selectionFallback.empty,2);assert.equal(h.calls.analyses,0);});
+    }
+    await run({batches:{[id(1)]:'missing',[id(2)]:'empty'}},r=>assert.equal(r.selectionFallback,undefined));
+    await run({initial:[]},r=>assert.equal(r.selectionFallback,undefined));
+    for(const score of [-.8,0,null])await run({score},r=>assert.equal(r.selectionFallback,undefined));
     await run({batches:{[id(1)]:'disabled'}},(r,h)=>{assert.equal(r.status,'ready');assert.equal(r.videoId,id(2));assert.deepEqual(h.calls.comments,[id(1),id(2)]);assert.equal(h.calls.search.length,1);assert.equal(h.calls.analyses,1);});
     await run({batches:{[id(1)]:'empty'}},(r,h)=>{assert.equal(r.videoId,id(2));assert.equal(r.status,'ready');assert.equal(h.calls.analyses,1);});
     await run({batches:{[id(1)]:'missing'}},(r,h)=>{assert.equal(r.videoId,id(2));assert.equal(r.status,'ready');assert.equal(h.calls.analyses,1);});

@@ -170,6 +170,7 @@ async function main() {
       assert.equal(event.completed, reviews.size + 1);
       reviews.set(result.key, result);
       if (result.status === 'ready' && result.summary) summaries.set(result.key, result.summary);
+      else if (result.selectionFallback) summaries.set(result.key, result.selectionFallback);
       console.log(`[analysis] ${event.completed}/${event.total}: ${result.status}${result.summary?.score != null ? ' score=' + result.summary.score.toFixed(3) : ''}`);
     }, signal), signal);
     assert.ok(streamComplete, 'Incomplete analysis cannot produce a saved playlist.');
@@ -179,7 +180,8 @@ async function main() {
   assert.ok(selected.length <= PLAYLIST_TRACK_LIMIT);
   for (const row of selected) {
     assert.ok(wanted.has(reviewKey(row.track)));
-    assert.ok(summaries.get(reviewKey(row.track))?.score > 0, 'Every selected song must have actual positive evidence.');
+    const evidence=summaries.get(reviewKey(row.track));
+    assert.ok(evidence?.score > 0 || (evidence?.status==='no-comments' && evidence.score===0), 'Selection needs positive evidence or an explicit no-comment policy fallback.');
   }
   assert.ok(selected.every((row, index) => index === 0 || summaries.get(reviewKey(selected[index - 1].track)).score >= summaries.get(reviewKey(row.track)).score), 'Final tracks must be ordered by descending sentiment score.');
   const statusCounts = {};
@@ -193,13 +195,13 @@ async function main() {
     limits: {candidateCollectionMs: 90000, candidates: PLAYLIST_CANDIDATE_LIMIT, selected: PLAYLIST_TRACK_LIMIT},
     seeds: liked.map(metadata), sourceResults,
     counts: {merged: collected.rows.length, candidates: candidates.length, checked: reviews.size,
-      ready: summaries.size, positive: positiveCount, selected: selected.length, failedSources: collected.failed, statuses: statusCounts},
+      ready: [...summaries.values()].filter(s=>s.status==='ready').length, noCommentFallback: [...summaries.values()].filter(s=>s.status==='no-comments').length, positive: positiveCount, selected: selected.length, failedSources: collected.failed, statuses: statusCounts},
     analysisComplete: streamComplete,
     candidates: candidates.map(row => {
       const result = reviews.get(reviewKey(row.track));
       return {...metadata(row.track), recommendationScore: row.score, paths: row.paths,
         selected: selectedKeys.has(reviewKey(row.track)),
-        review: result ? {status: result.status, videosChecked: result.videosChecked, ...(result.reason ? {reason: result.reason} : {}), ...(result.summary ? {summary: result.summary} : {}),
+        review: result ? {status: result.status, videosChecked: result.videosChecked, ...(result.reason ? {reason: result.reason} : {}), ...(result.summary ? {summary: result.summary} : {}), ...(result.selectionFallback ? {selectionFallback:result.selectionFallback} : {}),
           ...(result.videoId && /^[\w-]{11}$/.test(result.videoId) ? {videoId: result.videoId, videoUrl: 'https://www.youtube.com/watch?v=' + result.videoId, videoTitle: result.videoTitle} : {})} : null};
     }),
     selected: selected.map(row => ({...metadata(row.track), score: summaries.get(reviewKey(row.track)).score})),

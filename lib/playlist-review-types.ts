@@ -1,10 +1,11 @@
-import type {ReviewSummary} from './review-sentiment';
+import type {ReviewSummary,NoCommentsFallback} from './review-sentiment';
 
 export type ReviewTrack={title:string;artist:string;primaryArtistName?:string;durationMs?:number};
 export type TrackReview={
   key:string;
   status:'ready'|'no-match'|'comments-disabled'|'no-evidence'|'unavailable';
   summary?:ReviewSummary;
+  selectionFallback?:NoCommentsFallback;
   videoId?:string;
   videoTitle?:string;
   videosChecked?:number;

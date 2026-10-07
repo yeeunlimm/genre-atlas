@@ -77,6 +77,9 @@ export async function analyzePlaylistTrack(track:ReviewTrack,signal:AbortSignal)
     result={...result,status:disabled===count?'comments-disabled':missing===count?'unavailable':'no-evidence',reason:
       disabled===count?`Comments are disabled on all ${count} matched recording(s) checked.`:
       `No accessible comments after checking ${count} matched recording(s): ${disabled} disabled, ${empty} empty, ${missing} unavailable.`};
+    if(missing===0&&disabled+empty===count){
+      result.selectionFallback={status:'no-comments',score:0,sampleCount:0,checkedAt:new Date().toISOString(),videosChecked:count,disabled,empty};
+    }
   }
   result={...result,videosChecked:attempted.size};
   for(const [key,value] of cache)if(value.expires<=Date.now())cache.delete(key);
