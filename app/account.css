@@ -1,6 +1,11 @@
 .account-control{display:inline-flex;flex-direction:column;gap:8px;max-width:280px}
 .account-button{min-height:44px;padding:10px 16px;border:1px solid #686868;border-radius:4px;font-size:14px;cursor:pointer;background:#181818;color:#fff}
-.account-button.kakao-button{background:#fee500;color:#191919;border-color:#fee500;font-weight:600}
+.account-button.kakao-button{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:48px;padding:12px 20px;background:#fee500;color:#191919;border:0;border-radius:8px;font:400 16px/24px Arial,sans-serif;white-space:nowrap}
+.account-button.kakao-button:hover{background:#fee500;color:#191919;box-shadow:0 0 0 2px #ffffff40}
+.kakao-symbol{display:block;flex:0 0 20px}
+.station button.station-login-prompt{border:0;padding:8px 0;background:transparent;color:var(--muted-foreground);font-size:14px;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.station button.station-login-prompt:hover{background:transparent;color:var(--foreground)}
+.station button.station-login-prompt:focus-visible{outline:2px solid var(--ring);outline-offset:4px}
 .account-button:disabled{opacity:.65;cursor:wait}
 .account-button:focus-visible{outline:2px solid #fff;outline-offset:4px}
 .account-error{font-size:14px;color:#ffb7b7;line-height:1.5}

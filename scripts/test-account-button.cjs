@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),React=require('react');
+const {renderToStaticMarkup}=require('react-dom/server');
+let returnValue,signOuts=0,account={userId:null,ready:true,busy:false,error:'',signIn:value=>{returnValue=value;},signOut:()=>{signOuts++;}};
+const m={exports:{}};
+const source=fs.readFileSync('components/account-provider.tsx','utf8');
+new Function('exports','module','require',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText)(m.exports,m,id=>id==='react'?{...React,useContext:()=>account}:id.startsWith('@/')?{}:require(id));
+const tree=()=>m.exports.AccountButton({returnTo:'/?stationTrack=deezer:123#discovery-station'});
+let html=renderToStaticMarkup(tree());
+assert.ok(html.includes('Login with Kakao'));assert.ok(html.includes('class="kakao-symbol"'));assert.ok(html.includes('aria-hidden="true"'));
+assert.ok(!html.includes('카카오 로그인'));assert.ok(!html.includes('disabled=""'));
+tree().props.children[0].props.onClick();assert.equal(returnValue,'/?stationTrack=deezer:123#discovery-station');
+account={...account,busy:true};html=renderToStaticMarkup(tree());assert.ok(html.includes('Please wait…'));assert.ok(html.includes('disabled=""'));
+account={...account,busy:false,ready:false};html=renderToStaticMarkup(tree());assert.ok(html.includes('Checking sign-in…'));assert.ok(html.includes('disabled=""'));
+account={...account,ready:true,userId:'fixture-user'};html=renderToStaticMarkup(tree());assert.ok(html.includes('Sign out'));assert.ok(!html.includes('kakao-symbol'));tree().props.children[0].props.onClick();assert.equal(signOuts,1);
+const station=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');
+assert.ok(station.includes('Log in to like songs.</button>'));assert.ok(!station.includes('카카오 로그인 후 좋아요'));
+assert.ok(station.includes('onClick={()=>void account.signIn(returnTo)}'));
+console.log('PASS English Kakao button and like prompt, preserved login return/logout handlers, loading and disabled states.');
