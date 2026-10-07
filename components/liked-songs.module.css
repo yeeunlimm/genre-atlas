@@ -6,3 +6,18 @@
 @media(max-width:480px){.sleeve{padding-inline:10px}.label>span{font-size:6px}.label>b{font-size:13px}.label>small{font-size:5px}.label{inset:30%}.number{font-size:10px;bottom:-15px}}
 .label>b{font-size:clamp(10px,1.5vw,16px);max-width:85%;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;line-height:1.1}.label>small{max-width:85%;font-size:clamp(7px,1vw,10px)}.label>i{margin:6px 0 2px;flex-shrink:0}
 @media(prefers-reduced-motion:reduce){.cover{transition:none}}
+
+/* Compact record on the site's dark canvas — no paper backing. */
+.sleeve{padding:16px 12px;background:transparent;color:#e7e7e7;border:0;box-shadow:none}
+.header h3{font-size:clamp(26px,4vw,34px);margin:12px 0 8px!important;color:#ededed}
+.header p,.hint{color:#aaa!important}
+.stage{max-width:380px;margin:4px auto 0}
+.record{box-shadow:0 0 30px 5px #c7c7c724,0 10px 25px #aaa2,inset 0 0 0 3px #333,inset 0 0 0 7px #0a0a0a}
+.label{color:#20201e}
+.cover:focus-visible{outline-color:#ddd}
+.detail{min-height:120px;padding:14px 8px;border-color:#ffffff26}
+.detail h4{font-size:20px}.detail p{color:#ddd}.detail p span{color:#aaa}
+.actions>a,.actions>button{border-color:#ffffff45;color:#e7e7e7}
+.actions>a:hover,.actions>button:hover{background:#ffffff12}
+.actions :focus-visible{outline-color:#ddd}
+.footer{color:#999;border-color:#ffffff26;padding-top:10px}
