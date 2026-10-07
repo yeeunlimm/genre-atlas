@@ -53,6 +53,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       setShortlist(candidates);
       setNote('Analysing YouTube comments · 0 / '+candidates.length+'. The first model load can take longer.');
       const summaries=new Map<string,PlaylistReviewEvidence>(),checked=new Set<string>(),wanted=new Set(candidates.map(r=>reviewKey(r.track)));
+      let unavailableCount=0;
       const response=await accountFetch('/api/station/reviews',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([c.signal,AbortSignal.timeout(270000)]),body:JSON.stringify({tracks:candidates.map(({track:t})=>({title:t.title,artist:t.artist,primaryArtistName:t.primaryArtistName,durationMs:t.durationMs}))})});
       await readReviewStream(response,event=>{
         if(event.type==='heartbeat')return;
@@ -60,6 +61,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
         const row=event.result;
         if(!row||!wanted.has(row.key)||checked.has(row.key)||event.total!==candidates.length||event.completed!==checked.size+1)throw new Error('Invalid candidate analysis response.');
         checked.add(row.key);
+        if(row.status==='unavailable')unavailableCount++;
         if(row.status==='ready'&&row.summary)summaries.set(row.key,row.summary);
         else if(row.selectionFallback)summaries.set(row.key,row.selectionFallback);
         setReviews(old=>({...old,[row.key]:row}));setNote('Analysing YouTube comments · '+checked.size+' / '+candidates.length);
@@ -71,7 +73,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       const now=Date.now();recent.current=Object.fromEntries(Object.entries(recent.current).filter(([,at])=>Number.isFinite(at)&&at>now-3*86400000&&at<=now));
       for(const row of selection)recent.current[songKey(row.track)]=now;
       let saved=true;try{localStorage.setItem(storageKey,JSON.stringify({recent:recent.current}));}catch{saved=false;}
-      setNote(candidates.length+' candidates checked → '+selection.length+' tracks selected, highest positive sentiment first. '+(result.failed?result.failed+' candidate sources failed. ':'')+(saved?'':'Repeat history could not be saved.'));
+      setNote(candidates.length+' candidate results → '+selection.length+' tracks selected, positive scores first, no-comment fallbacks next. '+(unavailableCount?unavailableCount+' candidates could not be analysed because lookup or analysis was unavailable. ':'')+(result.failed?result.failed+' candidate sources failed. ':'')+(saved?'':'Repeat history could not be saved.'));
     }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'Playlist creation failed.');setNote('');}}
     finally{if(controller.current===c){controller.current=null;setBusy(false);}}
   }
@@ -90,7 +92,7 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
     <div className="playlist-build-actions"><button disabled={busy||!liked.length} onClick={()=>void build()}>{busy?'Building your personal playlist…':'Make a 10-track playlist'}</button>{busy&&<button onClick={cancel}>Cancel</button>}</div>
     {!liked.length&&<p>Like at least one song to start.</p>}
     <p role="status" aria-atomic="true">{note}</p>{error&&<p role="alert">{error}</p>}
-    {shortlist.length>0&&<details className="playlist-candidates"><summary>Candidates · {shortlist.length} · Comments checked {Object.keys(reviews).length}/{shortlist.length}</summary>
+    {shortlist.length>0&&<details className="playlist-candidates"><summary>Candidates · {shortlist.length} · Results {Object.keys(reviews).length}/{shortlist.length}</summary>
       <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div></li>;})}</ol>
     </details>}
     {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates qualified. Unmatched recordings and analysis errors were not used to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small><small>{reviewLabel(reviews[reviewKey(r.track)])}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
