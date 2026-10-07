@@ -178,7 +178,7 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
     assert.deepEqual(unavailable.states[1], []);
     assert.equal(unavailable.states[5], 'Fixture analysis is unavailable.');
 
-    const ready = await runComponent();
+    const ready = await runComponent({availability: reviewAvailability({YOUTUBE_API_KEY: 'fixture-key'})});
     assert.equal(ready.events[0], 'GET /api/station/reviews');
     assert.equal(ready.events[1], 'collect');
     assert.equal(ready.collectCalls, 1);
@@ -207,10 +207,14 @@ async function runComponent({likes = [seed], availability = {ready: true}} = {})
     assert.deepEqual(empty.writes, []);
     assert.equal(empty.states[0], null);
 
-    assert.equal(reviewAvailability({YOUTUBE_DERIVED_METRICS_APPROVED: 'true', YOUTUBE_API_KEY: ' \t\n '}).ready, false);
-    assert.equal(reviewAvailability({YOUTUBE_API_KEY: 'fixture-key'}).ready, false);
-    assert.equal(reviewAvailability({YOUTUBE_DERIVED_METRICS_APPROVED: 'true', YOUTUBE_API_KEY: 'fixture-key'}).ready, true);
-    console.log('PASS: real playlist button checks readiness before collecting; unavailable/no-likes do not collect, analyse or write history; ready flow shortlists 40 to 30, checks all 30 and keeps only 10 strictly positive candidates; likes unchanged and whitespace keys rejected. All API/comment/model data are mocked.');
+    for (const approval of [undefined, 'false', 'true']) {
+      const config = approval === undefined ? {} : {YOUTUBE_DERIVED_METRICS_APPROVED: approval};
+      assert.equal(reviewAvailability(config).ready, false);
+      assert.equal(reviewAvailability({...config, YOUTUBE_API_KEY: ''}).ready, false);
+      assert.equal(reviewAvailability({...config, YOUTUBE_API_KEY: ' \t\n '}).ready, false);
+      assert.equal(reviewAvailability({...config, YOUTUBE_API_KEY: 'fixture-key'}).ready, true);
+    }
+    console.log('PASS: real playlist button checks readiness before collecting; unavailable/no-likes do not collect, analyse or write history; ready flow shortlists 40 to 30, checks all 30 and keeps only 10 strictly positive candidates; likes unchanged; missing/blank keys rejected regardless of legacy approval; key enables analysis with absent/false legacy approval. All API/comment/model data are mocked.');
   } finally {
     global.fetch = originalFetch;
   }

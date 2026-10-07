@@ -1,4 +1,6 @@
-// Scores must come from a validated analyzer, not likes, views or star ratings.
+// Validate score structure, not music-domain accuracy. Never use likes/views as sentiment.
+export type ReviewMethod = 'en-model-v1' | 'ko-lexicon-v1';
+export type ScoredReview = {commentId:string; relevantToSong:boolean; score:number; method:ReviewMethod};
 export type ReviewPrediction = {
   commentId: string;
   relevantToSong: boolean;
@@ -11,7 +13,24 @@ export type ReviewSummary = {
   score: number | null;
   sampleCount: number;
   analyzedAt: string;
+  methodCounts?: Partial<Record<ReviewMethod, number>>;
 };
+
+// Keep lexicon scores distinct from model probabilities; average signed scores
+// only after validation. This is a heuristic gate, not a calibrated probability.
+export function summarizeScoredReviews(rows:ScoredReview[], now=new Date()):ReviewSummary {
+  const seen=new Set<string>(),values:number[]=[];
+  const methodCounts:Partial<Record<ReviewMethod,number>>={};
+  for(const row of rows){
+    if(!row.relevantToSong||!row.commentId||seen.has(row.commentId)||
+      !Number.isFinite(row.score)||row.score < -1||row.score > 1||
+      !['en-model-v1','ko-lexicon-v1'].includes(row.method))continue;
+    seen.add(row.commentId);values.push(row.score);
+    methodCounts[row.method]=(methodCounts[row.method]||0)+1;
+  }
+  return {status:values.length?'ready':'no-evidence',score:values.length?values.reduce((a,b)=>a+b,0)/values.length:null,
+    sampleCount:values.length,analyzedAt:now.toISOString(),methodCounts};
+}
 
 export function summarizeReviews(rows: ReviewPrediction[], now = new Date()): ReviewSummary {
   const seen = new Set<string>();

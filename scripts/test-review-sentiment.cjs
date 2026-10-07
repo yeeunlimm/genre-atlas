@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
 function load(file){const m={exports:{}};new Function('exports','module',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,m);return m.exports;}
 const {summarizeReviews,positiveReviewCandidates}=load('lib/review-sentiment.ts');
-const {youtubeReviewComments,assertYouTubeAnalysisApproved}=load('lib/youtube-review-comments.ts');
+const {youtubeReviewComments,REVIEW_COMMENT_LIMIT}=load('lib/youtube-review-comments.ts');
 const now=new Date('2026-10-07T00:00:00Z');
 const prediction=(id,p,n,related=true)=>({commentId:id,positive:p,negative:n,neutral:1-p-n,relevantToSong:related});
 const positive=summarizeReviews([prediction('a',.8,.1),prediction('a',.8,.1),prediction('b',.9,0,false),prediction('invalid',2,0)],now);
@@ -9,14 +9,32 @@ assert.equal(positive.sampleCount,1);assert.ok(positive.score>0);
 assert.equal(summarizeReviews([],now).score,null);
 const summaries=new Map([['positive',positive],['zero',summarizeReviews([prediction('z',.5,.5)],now)],['negative',summarizeReviews([prediction('n',0,1)],now)],['stale',{...positive,analyzedAt:'2026-10-05T00:00:00Z'}]]);
 assert.deepEqual(positiveReviewCandidates(['missing','negative','zero','stale','positive','positive'].map(trackId=>({trackId})),summaries,+now),[{trackId:'positive'}]);
-assert.throws(()=>assertYouTubeAnalysisApproved({}));
 (async()=>{
+ assert.equal(REVIEW_COMMENT_LIMIT,50);
  let calls=0;
- const request=async(url,options)=>{calls++;assert.ok(!String(url).includes('test-secret'));assert.equal(options.headers['X-Goog-Api-Key'],'test-secret');return Response.json({items:[{id:'1',snippet:{topLevelComment:{snippet:{textDisplay:'A test comment'}}}}],nextPageToken:'more'});};
+ const request=async(url,options)=>{calls++;const query=new URL(url).searchParams;assert.equal(query.get('maxResults'),'50');assert.equal(query.get('order'),'relevance');assert.equal(query.has('pageToken'),false);assert.ok(!String(url).includes('test-secret'));assert.equal(options.headers['X-Goog-Api-Key'],'test-secret');assert.ok(options.signal instanceof AbortSignal);return Response.json({items:[{id:'1',snippet:{topLevelComment:{snippet:{textDisplay:'A test comment'}}}}],nextPageToken:'more'});};
+ for(const key of [undefined,'',' \t\n '])await assert.rejects(youtubeReviewComments('tAyYYKcySXA',key,request),/server key is not configured/);
+ assert.equal(calls,0,'Missing or whitespace-only keys must be rejected before comment requests.');
  const batch=await youtubeReviewComments('tAyYYKcySXA','test-secret',request);
- assert.equal(calls,2);assert.equal(batch.comments.length,1);assert.equal(batch.hasMore,true);
+ assert.equal(calls,1,'A short page with nextPageToken must not trigger a follow-up request.');assert.equal(batch.comments.length,1);assert.equal(batch.hasMore,true);
+ const comment=(id,text='Test comment '+id)=>({id:String(id),snippet:{topLevelComment:{snippet:{textDisplay:text}}}});
+ const collectFixture=async(items,nextPageToken)=>{
+  let requests=0;
+  const result=await youtubeReviewComments('tAyYYKcySXA','test-secret',async()=>{requests++;return Response.json({items,...(nextPageToken?{nextPageToken}:{})});});
+  assert.equal(requests,1,'Each video gets one comment request regardless of duplicates or additional pages.');
+  return result;
+ };
+ const full=await collectFixture(Array.from({length:50},(_,i)=>comment(i)));
+ assert.equal(full.status,'ready');assert.equal(full.comments.length,50);assert.equal(full.hasMore,false);
+ const oversized=await collectFixture(Array.from({length:75},(_,i)=>comment(i)),'more');
+ assert.equal(oversized.comments.length,50,'Even an oversized provider response must never return a 51st comment.');
+ assert.deepEqual(oversized.comments.map(row=>row.id),Array.from({length:50},(_,i)=>String(i)));assert.equal(oversized.hasMore,true);
+ const duplicate=await collectFixture([comment('same','A test comment'),comment('same','Another text'),comment('other','  A   TEST comment  '),comment('unique','A different comment')],'more');
+ assert.deepEqual(duplicate.comments.map(row=>row.id),['same','unique']);assert.equal(duplicate.hasMore,true);
+ const empty=await collectFixture([],'more');assert.equal(empty.status,'empty');assert.deepEqual(empty.comments,[]);
  const disabled=await youtubeReviewComments('tAyYYKcySXA','test-secret',async()=>Response.json({error:{errors:[{reason:'commentsDisabled'}]}},{status:403}));
  assert.equal(disabled.status,'disabled');assert.equal(disabled.comments.length,0);
+ await assert.rejects(youtubeReviewComments('tAyYYKcySXA','test-secret',async()=>Response.json({error:{errors:[{reason:'quotaExceeded'}]}},{status:403})),/daily quota exhausted/);
  await assert.rejects(youtubeReviewComments('bad','test-secret',request));
- console.log('PASS: strict positive-only gate, missing/invalid/stale exclusion, deduplication, bounded comments, disabled comments, approval guard. Synthetic scores only; no live sentiment analysis claimed.');
+ console.log('PASS: strict positive-only gate, missing/invalid/stale exclusion; one relevance request per video with maximum 50 deduplicated comments, oversized response capped, short/duplicate/empty pages never refilled, nextPageToken never followed; disabled/quota errors and missing/blank server-key guard. Synthetic scores only; no live sentiment analysis claimed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

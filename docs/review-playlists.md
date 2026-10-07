@@ -16,9 +16,12 @@
   conservatively match song, artist channel, version and duration. This is a
   metadata heuristic, not proof of official channel ownership. Ambiguous matches
   abstain. Unmatched versions, disabled comments and missing evidence never pass.
-- Fetch up to 200 recent/relevant top-level comments, deduplicate, apply the
-  existing English music-evaluation rules and analyse at most 40 eligible comments
-  with the pinned pretrained model. Raw comments stay in server memory only.
+- Fetch at most 50 relevance-ordered top-level comments in one request per video.
+  Deduplicate and never fetch another page to fill short/duplicate results.
+  Unsupported/unrelated comments abstain; fewer than 50 usable comments is valid.
+  English music evaluations use the pinned pretrained model; Korean evaluations
+  can use the optional user dictionary and explicit music-context rules.
+  Raw comments stay in server memory only. Then proceed to the next candidate.
 - After all candidates are checked, retain scores strictly >0 in personalized
   recommendation order and select at most 10. Return fewer when necessary, with
   per-candidate scores/sample counts/source links and explicit exclusion reasons.
@@ -41,30 +44,97 @@ loaded into temporary cache at runtime, not shipped to the browser or Git.
 
 ### Activation and verification boundary
 
-The build action checks availability before candidate collection. The
-comment stage requires both server-only `YOUTUBE_API_KEY` and
-`YOUTUBE_DERIVED_METRICS_APPROVED=true`. **The flag does not accept terms or confer
-provider approval.** Do not set it without confirming the use case/required terms:
-https://developers.google.com/youtube/terms/derived-metrics-policy . No approval or
-key setting was changed during this implementation.
+The build action checks technical availability before candidate collection. The
+comment stage requires a non-empty server-only `YOUTUBE_API_KEY`. At the user's
+request, the manually added `YOUTUBE_DERIVED_METRICS_APPROVED` runtime gate was
+removed; missing/false legacy values no longer disable analysis. Nothing is set
+to claim provider approval. The key is never returned to the browser.
+
+This is a technical configuration change, not a determination of permission to
+use YouTube data. The provider's applicable terms still apply, including
+https://developers.google.com/youtube/terms/derived-metrics-policy . This local
+project change does not submit an application, accept terms or establish an
+approval. No production configuration or deployment was changed in this run.
+Authentication, same-origin validation, batch bounds, throttling and cancellation
+remain enforced by the web endpoint.
 
 Tests cover 40 pooled candidates → 30 shortlisted → 30 synthetic comment analyses
 → 10 positive tracks, fewer-than-ten, source matching, guards, throttling,
 cancellation, account boundaries, stream truncation and unmodified discovery.
 The actual pretrained model was also run on authored positive/negative sentences.
-These are NOT live YouTube-comment results or proof of production inference.
-No new YouTube comment analysis was run while the terms confirmation is pending.
+Those synthetic checks are NOT proof of production inference. A separate local
+live run on 2026-10-07 used the supplied notebook key (process environment only):
+SKELETONS / tAyYYKcySXA returned 195 deduplicated comments, 24 eligible English
+music evaluations, 17 positive / 3 neutral / 4 negative, mean score +0.555466.
+Only aggregate results were saved under ignored `work/review-live-*.json`.
+This proves that example's local collection/inference, not member-account or
+deployed-server playlist generation, nor measured recommendation quality.
 Daily scheduling and persistent member playlists remain outside this change.
+
+### Optional Korean dictionary (local project)
+
+Set server-only `SENTIMENT_LEXICON_PATH` to the supplied `SentiWord_info_updated.json`.
+The original file is read, not edited or copied into Git. Without a readable
+dictionary, Korean comments abstain; the English model remains usable.
+The dictionary is a process snapshot: restart after editing it. A different path
+uses a different review cache key.
+
+The supplied file has 14,861 rows / 14,859 unique words. Two words repeat and one
+(`울컥하다`) has conflicting -2/-1 scores. Unicode/spacing normalization yields
+14,858 distinct entries and a second conflict in the crying emoticon. After
+conflict/neutral/ambiguous/format exclusions, 14,559 entries are usable.
+Conflicting entries are excluded rather
+than arbitrarily picking one. User-added fillers/appearance terms such as
+`그냥`, `진짜`, `얼굴`, `몸매` do not establish song evaluation. Ambiguous standalone
+`소름`, `미친`, `중독`, `눈물` do not establish negative music sentiment.
+Music-specific phrase corrections are authored heuristics, not human-labelled
+training data or validated accuracy improvements. The supplied scores remain
+unchanged for eligible unambiguous dictionary entries.
+
+English signed scores are P(positive)-P(negative); Korean scores are normalized
+dictionary scores. They share [-1,1] numerically but are NOT calibrated equivalent
+probabilities. Average eligible comment scores as an experimental gate, retain
+`methodCounts`, and do not interpret the result as a chance of liking the song.
+Never manufacture neutral/positive evidence from missing dictionary matches.
+
+### Reproducible local trial
+
+With `YOUTUBE_API_KEY` in the process environment, run
+`node scripts/preview-liked-playlist.mjs --seed-id sundress`.
+This runs the real candidate collector, video matching, comment model and final
+selection without reading or altering browser/account data. Results use a new
+exclusive `work/live-playlist-*.json` file; no raw text, comment IDs, dictionary or
+key is saved. It is a neutral explicit-seed trial, not a signed-in member test.
+
+Before the 50-comment change, a real Sundress trial yielded 42 merged candidates,
+15 unique-artist candidates and 3 positive selections: Norah Jones — Happy Pills,
+Dua Lipa — Houdini, Tame Impala — New Person, Same Old Mistakes. Six candidates
+had no conservative video match and six had disabled comments. No slots were
+filled with unanalyzed songs.
+
+The updated 50-comment trial on 2026-10-07 at 08:48 UTC also yielded 15 shortlisted
+candidates and 3 positive selections: Happy Pills +0.782450 (6 eligible comments),
+Houdini +0.710707 (7), New Person, Same Old Mistakes +0.593418 (11). Seven had
+disabled comments and five had no matched video. These live eligible comments
+were all English; Korean scoring was verified with authored positive/negative,
+negation and unrelated-topic examples using the supplied dictionary, not claimed
+as a live Korean-comment evaluation. Neither run uses member browser data.
 
 Tests: `node scripts/test-playlist-review-flow.cjs`,
 `node scripts/test-review-api.cjs`, `node scripts/test-liked-playlist.cjs`,
 `node scripts/test-review-sentiment.cjs`, `node scripts/test-kakao-auth.cjs`,
 `node scripts/test-playlist-preflight.cjs`, `node scripts/test-no-playlist-import.cjs`.
+Additional tests: `node scripts/test-korean-review-lexicon.mjs`,
+`node scripts/test-signed-review-scores.cjs`.
 
 The text-list import UI is no longer connected to the station. Existing saved
 likes remain intact; songs are added individually through their like controls.
 
 ## Earlier implementation and local experiments (historical)
+
+The sections below preserve the earlier implementation record. References to
+approval guards, missing automatic matching, and file-backed API responses
+describe those earlier versions, not the current flow above.
 
 ## Implemented, 2026-10-07
 

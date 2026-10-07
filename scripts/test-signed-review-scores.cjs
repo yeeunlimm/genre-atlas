@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const m={exports:{}};
+new Function('exports','module',ts.transpileModule(fs.readFileSync('lib/review-sentiment.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(m.exports,m);
+const {summarizeScoredReviews,positiveReviewCandidates}=m.exports;
+const now=new Date('2026-10-07T09:00:00Z');
+const row=(id,score,method='ko-lexicon-v1')=>({commentId:id,score,method,relevantToSong:true});
+const summary=summarizeScoredReviews([row('ko',.5),row('en',.9,'en-model-v1'),row('neg',-.2),row('ko',1),row('invalid',2),row('unknown',1,'invented'),{...row('unrelated',1),relevantToSong:false}],now);
+assert.equal(summary.sampleCount,3);
+assert.ok(Math.abs(summary.score-.4)<1e-10);
+assert.deepEqual(summary.methodCounts,{'ko-lexicon-v1':2,'en-model-v1':1});
+assert.equal(summarizeScoredReviews([row('bad',NaN)],now).score,null);
+const scores=new Map([['good',summary],['zero',summarizeScoredReviews([row('zero',0)],now)],['bad',summarizeScoredReviews([row('negative',-1)],now)]]);
+assert.deepEqual(positiveReviewCandidates(['good','zero','bad','missing'].map(trackId=>({trackId})),scores,+now),[{trackId:'good'}]);
+console.log('PASS: signed model/lexicon scores stay distinct from probabilities; method counts, deduplication, range checks and strict-positive selection.');

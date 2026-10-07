@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const modules=new Map();
 function load(file){file=path.resolve(file);if(modules.has(file))return modules.get(file);const m={exports:{}};modules.set(file,m.exports);
  new Function('exports','module','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,m,id=>{
-  if(id.endsWith('review-analyzer.mjs'))return {reviewEligibility:text=>text.startsWith('I '),sentiment:async text=>text.includes('hate')?{positive:.05,neutral:.05,negative:.9}:{positive:.9,neutral:.05,negative:.05}};
+  if(id.endsWith('review-analyzer.mjs'))return {analyzeReview:async text=>text.startsWith('I ')?{score:text.includes('hate')?-.85:.85,method:'en-model-v1'}:null};
   return id.startsWith('.')?load(path.resolve(path.dirname(file),id+'.ts')):require(id);
  });return m.exports;}
 const {matchReviewVideo,findReviewVideo,ReviewProviderError}=load('lib/youtube-review-match.ts');
@@ -25,14 +25,18 @@ const song={title:'Song',artist:'Artist',durationMs:180000};
  assert.equal(lookupCalls,2);assert.equal(matched.id,'abcdefghijk');
  await assert.rejects(findReviewVideo(song,'fixture-key',new AbortController().signal,async()=>Response.json({error:{errors:[{reason:'quotaExceeded'}]}},{status:403})),e=>e instanceof ReviewProviderError&&e.kind==='quota');
  assert.equal(reviewAvailability({}).ready,false);assert.equal(reviewAvailability({YOUTUBE_DERIVED_METRICS_APPROVED:'true'}).ready,false);
+ assert.equal(reviewAvailability({YOUTUBE_API_KEY:'fixture-key'}).ready,true);
+ assert.equal(reviewAvailability({YOUTUBE_API_KEY:'fixture-key',YOUTUBE_DERIVED_METRICS_APPROVED:'false'}).ready,true);
 
  const oldFetch=global.fetch,oldKey=process.env.YOUTUBE_API_KEY,oldApproval=process.env.YOUTUBE_DERIVED_METRICS_APPROVED;
  let externalCalls=0;
  try{
-  process.env.YOUTUBE_API_KEY='fixture-key';delete process.env.YOUTUBE_DERIVED_METRICS_APPROVED;
+  delete process.env.YOUTUBE_API_KEY;delete process.env.YOUTUBE_DERIVED_METRICS_APPROVED;
   global.fetch=async()=>{externalCalls++;throw new Error('must not run');};
-  await assert.rejects(analyzePlaylistTrack(song,new AbortController().signal));assert.equal(externalCalls,0);
-  process.env.YOUTUBE_DERIVED_METRICS_APPROVED='true';
+  await assert.rejects(analyzePlaylistTrack(song,new AbortController().signal),/server key is not configured/);assert.equal(externalCalls,0);
+  process.env.YOUTUBE_API_KEY=' \t\n ';process.env.YOUTUBE_DERIVED_METRICS_APPROVED='true';
+  await assert.rejects(analyzePlaylistTrack(song,new AbortController().signal),/server key is not configured/);assert.equal(externalCalls,0);
+  process.env.YOUTUBE_API_KEY='fixture-key';delete process.env.YOUTUBE_DERIVED_METRICS_APPROVED;
   const seed=stationCatalog[0];
   const candidates=Array.from({length:40},(_,i)=>({track:{...seed,id:'r'+i,recordingId:'r'+i,title:'Song '+i,artist:'Artist '+i,primaryArtistName:'Artist '+i,artistId:'a'+i,album:'album'+i,albumFamily:'family'+i,durationMs:180000},score:0,reasons:[],paths:[{route:'credits',seedId:seed.id,confidence:1-i*.01}]}));
   const shortlist=shortlistLikedCandidates(candidates,[seed],blankMemory(),{});
@@ -48,13 +52,16 @@ const song={title:'Song',artist:'Artist',durationMs:180000};
   };
   const events=[];let released=0;
   await readReviewStream(new Response(playlistReviewStream(shortlist.map(r=>r.track),analyzePlaylistTrack,new AbortController().signal,()=>{released++;})),e=>events.push(e),new AbortController().signal);
-  assert.equal(released,1);assert.equal(events.filter(e=>e.type==='progress').length,30);assert.equal(externalCalls,120);
+  assert.equal(released,1);assert.equal(events.filter(e=>e.type==='progress').length,30);assert.equal(externalCalls,90);
   assert.equal(events.at(-1).type,'complete');assert.equal(events.at(-1).total,30);
   assert.equal(videos.size,30);assert.ok([...videos.values()].every(i=>i<30));
   const summaries=new Map(events.filter(e=>e.type==='progress').map(e=>[e.result.key,e.result.summary]));
   const selected=selectLikedPlaylist(shortlist,[seed],blankMemory(),{},summaries);
   assert.equal(selected.length,10);assert.equal(selected[0].track.id,'r6');assert.ok(selected.every(r=>shortlist.some(s=>s.track.id===r.track.id)));
   const before=externalCalls;await analyzePlaylistTrack(shortlist[0].track,new AbortController().signal);assert.equal(externalCalls,before);
+  process.env.YOUTUBE_DERIVED_METRICS_APPROVED='false';
+  const withFalseApproval=await analyzePlaylistTrack(candidates[30].track,new AbortController().signal);
+  assert.equal(withFalseApproval.status,'ready');assert.ok(withFalseApproval.summary.score>0);assert.equal(externalCalls,before+3);
   assert.ok(events.every(e=>!JSON.stringify(e).includes('fixture-key')&&!JSON.stringify(e).includes('I love')));
  }finally{global.fetch=oldFetch;for(const [k,v] of [['YOUTUBE_API_KEY',oldKey],['YOUTUBE_DERIVED_METRICS_APPROVED',oldApproval]])if(v===undefined)delete process.env[k];else process.env[k]=v;}
 
@@ -68,5 +75,5 @@ const song={title:'Song',artist:'Artist',durationMs:180000};
  const bytes=new TextEncoder().encode('{"type":"heartbeat"}\n{"type":"complete","total":0}\n');
  const pieces=new ReadableStream({start(c){c.enqueue(bytes.slice(0,11));c.enqueue(bytes.slice(11));c.close();}});
  const decoded=[];await readReviewStream(new Response(pieces),e=>decoded.push(e),new AbortController().signal);assert.equal(decoded.length,2);
- console.log('PASS: 40 candidates → fixed 30 → matched-video lookup → all 30 synthetic comment analyses → positive-only 10; no raw text/keys returned; wrong covers/versions excluded; warm cache, quota stop, cancellation and truncated stream covered. No live YouTube calls.');
+ console.log('PASS: 40 candidates → fixed 30 → matched-video lookup → all 30 synthetic comment analyses → positive-only 10; missing/blank keys block, absent/false legacy approval does not; no raw text/keys returned; wrong covers/versions excluded; warm cache, quota stop, cancellation and truncated stream covered. No live YouTube calls.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

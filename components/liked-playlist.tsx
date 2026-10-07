@@ -92,6 +92,6 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
       <ol>{shortlist.map(({track})=>{const key=reviewKey(track),review=reviews[key];return <li key={key}><div><b>{track.title}</b><small>{track.artist}</small><small>{selected.has(key)?'Selected · ':''}{reviewLabel(review)}</small>{review?.videoId&&/^[\w-]{11}$/.test(review.videoId)&&<a href={'https://www.youtube.com/watch?v='+review.videoId} target="_blank" rel="noreferrer">Comment source ↗</a>}</div></li>;})}</ol>
     </details>}
     {playlist&&<><h3>Your playlist · {playlist.length} tracks</h3>{playlist.length<10&&<p>Only {playlist.length} candidates passed all checks. No unanalysed or non-positive songs were added to fill 10 slots.</p>}<ol>{playlist.map(r=><li key={songKey(r.track)}><div><b>{r.track.title}</b><small>{r.track.artist} · {r.track.album}</small></div><a href={trackYouTubeUrl(r.track)} target="_blank" rel="noreferrer">Listen ↗</a></li>)}</ol></>}
-    <small>Experimental English-comment analysis, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
+    <small>Up to 50 comments per video. Experimental English-model scoring and optional Korean-dictionary scoring, not a guarantee of your taste. Likes and repeat history stay in this browser for your account. This does not save to YouTube.</small>
   </section>;
 }
