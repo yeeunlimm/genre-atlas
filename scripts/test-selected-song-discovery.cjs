@@ -1,0 +1,26 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript');
+const modules={};function load(name){if(modules[name])return modules[name];const m={exports:{}};new Function('exports','require','module',ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(m.exports,p=>p.startsWith('./')?load(p.slice(2)):require(p),m);return modules[name]=m.exports;}
+const h=load('hybrid-station'),policy=load('selected-song-discovery'),p=load('station-profile'),{stationCatalog:c}=load('station-catalog');
+const seed=c[0],saved=c[1],fresh={...c[2],id:'fresh',recordingId:'fresh',artist:'Different Artist',artistId:'different',primaryArtistName:'Different Artist',title:'Fresh Song',album:'Fresh Album',albumFamily:'fresh'};
+const row=(track,route,confidence)=>({track,score:0,reasons:[],paths:[{route,confidence,seedId:seed.id}],feedbackBoost:false});
+const a=row(fresh,'related-artists',.8),b=row({...fresh,id:'second',recordingId:'second',title:'Another Song',artist:'Other Artist',primaryArtistName:'Other Artist',artistId:'other'},'credits',.81);
+const crossCatalog={...saved,id:'other-provider',recordingId:'other-provider'};
+assert.deepEqual(p.stationSeeds(seed,[saved,fresh]),[seed],'saved likes never become discovery seeds');
+assert.equal(policy.selectedSongRows([row(crossCatalog,'credits',.9),a],[saved]).length,1,'cross-catalog already-liked song excluded');
+assert.equal(policy.selectedSongRows([row(crossCatalog,'credits',.9),a],[]).length,2,'removing a like restores eligibility, subject to other filters');
+const original=h.recordVote(h.blankMemory(),a,'like'),snapshot=JSON.stringify(original);
+const neutral=policy.selectedSongMemory(original);
+assert.deepEqual(h.routeWeights(neutral),{credits:1,'related-artists':1,'similar-tracks':1});
+assert.equal(h.rankCandidates([a,b],[seed],neutral)[0].track.id,'second','past likes do not reorder discovery');
+assert.equal(JSON.stringify(original),snapshot,'do not delete saved feedback');
+const disliked=policy.selectedSongMemory(h.recordVote(original,b,'dislike'));
+assert.equal(h.rankCandidates([a,b],[seed],disliked).length,1,'dislikes still excluded');
+const component=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');
+assert.ok(component.includes('selectedSongRows(rows,liked)'));
+assert.ok(component.includes('onRemove={removeLiked}'));
+assert.ok(component.includes('likedSong(track)?removeLiked(track)'));
+assert.ok(!component.includes('start(origin||track,next'));
+assert.ok(!component.includes('rankCandidates(rows,seeds,memory'));
+assert.ok(!component.includes('modelScore('));
+const playlist=fs.readFileSync('components/liked-playlist.tsx','utf8');assert.ok(playlist.includes('collectLikedCandidates(liked'));
+console.log('PASS selected-song-only discovery, cross-catalog liked exclusions, remove-like eligibility, neutral ranking, preserved ratings and separate liked playlist.');

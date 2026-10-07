@@ -3,7 +3,8 @@ import {useEffect,useMemo,useRef,useState} from "react";
 import {Radio,Play,SkipForward,ThumbsUp,ThumbsDown,RotateCcw,Search} from "lucide-react";
 import {stationCatalog,type StationTrack} from "@/lib/station-catalog";
 import {recommend,trackYouTubeUrl} from "@/lib/discovery-station";
-import {appendExposure,emptyLearning,exportLearning,featureVector,learningKey,makeExposure,modelScore,rateExposure,readLearning,trainRanker,type LearningData} from "@/lib/station-learning";
+import {appendExposure,emptyLearning,exportLearning,learningKey,makeExposure,rateExposure,readLearning,trainRanker,type LearningData} from "@/lib/station-learning";
+import {selectedSongRows,selectedSongMemory} from '@/lib/selected-song-discovery';
 import {blankMemory,cleanMemory,excluded,mergeCandidates,MEMORY_KEY,rankCandidates,recordVote,remember,routeLabels,routeWeights,routes,songKey,type Candidate,type Memory,type Route} from "@/lib/hybrid-station";
 import type {LiveStationResult} from "@/lib/live-station";
 import type {SourceResult} from "@/lib/hybrid-sources";
@@ -38,7 +39,8 @@ export function DiscoveryStation(){
   const learningRef=useRef(learning),group=useRef(""),exposure=useRef<{id:string;song:string}|null>(null);
   learningRef.current=learning;
   const model=useMemo(()=>trainRanker(learning),[learning]);
-  const scoring=useMemo(()=>model.active?(row:Candidate)=>modelScore(model,featureVector(row,seeds,learning)):undefined,[model,seeds,learning]);
+  const discoveryRows=useMemo(()=>selectedSongRows(rows,liked),[rows,liked]);
+  const discoveryMemory=useMemo(()=>selectedSongMemory(memory),[memory]);
   function updateLearning(next:LearningData){learningRef.current=next;setLearning(next);}
   function feedback(action:"like"|"dislike"|"skip",row:Candidate){
     const shown=exposure.current;if(!shown||shown.song!==songKey(row.track))return;
@@ -55,23 +57,23 @@ export function DiscoveryStation(){
     let training=emptyLearning();try{const raw=localStorage.getItem(learningKey(id));training=readLearning(raw?JSON.parse(raw):null);}catch{}
     identity.current=id;setUserId(id);setMemory(profile.memory);setLiked(profile.liked);updateLearning(training);exposure.current=null;setHydrated(true);return profile;
   }
-  useEffect(()=>{mounted.current=true;let active=true;void(async()=>{const profile=await loadIdentity();if(!profile||!active)return;const id=new URLSearchParams(window.location.search).get("stationTrack");if(id&&id.length<=80){try{const response=await fetch("/api/station/track?"+new URLSearchParams({id}));if(!response.ok)throw new Error();const d=await response.json() as {track:StationTrack};if(active)void start(d.track,profile.liked);}catch{if(active)setNotice("Your previous song could not be restored. Search for it again.");}}})();return()=>{active=false;mounted.current=false;searchRequest.current?.abort();stationRequest.current?.abort();likeRequest.current?.abort();};},[]);
+  useEffect(()=>{mounted.current=true;let active=true;void(async()=>{const profile=await loadIdentity();if(!profile||!active)return;const id=new URLSearchParams(window.location.search).get("stationTrack");if(id&&id.length<=80){try{const response=await fetch("/api/station/track?"+new URLSearchParams({id}));if(!response.ok)throw new Error();const d=await response.json() as {track:StationTrack};if(active)void start(d.track);}catch{if(active)setNotice("Your previous song could not be restored. Search for it again.");}}})();return()=>{active=false;mounted.current=false;searchRequest.current?.abort();stationRequest.current?.abort();likeRequest.current?.abort();};},[]);
   useEffect(()=>{if(!hydrated)return;try{localStorage.setItem(profileKey(userId),JSON.stringify({version:2,memory,liked:userId?liked:[]}));}catch{setStorageNote("Your browser could not save preferences. They remain in this tab only.");}},[memory,liked,userId,hydrated]);
   useEffect(()=>{if(!hydrated)return;try{localStorage.setItem(learningKey(userId),JSON.stringify(learning));}catch{setStorageNote("Your browser could not save training records. They remain in this tab only.");}},[learning,userId,hydrated]);
-  const ranked=useMemo(()=>rankCandidates(rows,seeds,memory,consumed,Date.now(),scoring),[rows,seeds,memory,consumed,scoring]);
+  const ranked=useMemo(()=>rankCandidates(discoveryRows,seeds,discoveryMemory,consumed),[discoveryRows,seeds,discoveryMemory,consumed]);
   // Keep the visible song stable while slower sources reorder the upcoming queue.
   useEffect(()=>{if(hydrated&&!current&&ranked[0]){
     const row=ranked[0],event=makeExposure(row,seeds,learningRef.current,group.current||crypto.randomUUID(),crypto.randomUUID());
     exposure.current={id:event.id,song:event.song};updateLearning(appendExposure(learningRef.current,event));
     setCurrent(row);setMemory(m=>remember(m,row.track));
   }},[ranked,current,hydrated,seeds]);
-  useEffect(()=>{if(current&&excluded(current.track,seeds)){setCurrent(undefined);setNotice("An additional album match was found. Moving to another discovery.");}},[current,seeds]);
-  const shown=current?(rows.find(r=>songKey(r.track)===songKey(current.track))||current):undefined;
-  const queue=useMemo(()=>rankCandidates(rows,seeds,memory,current?[...consumed,current.track]:consumed,Date.now(),scoring),[rows,seeds,memory,current,consumed,scoring]);
-  const weights=routeWeights(memory),loading=Object.values(progress).some(p=>p.state==="loading");
+  useEffect(()=>{if(current&&(excluded(current.track,seeds)||liked.some(t=>songKey(t)===songKey(current.track)))){setCurrent(undefined);setNotice("Already liked or excluded. Moving to another discovery.");}},[current,seeds,liked]);
+  const shown=current&&!liked.some(t=>songKey(t)===songKey(current.track))?(discoveryRows.find(r=>songKey(r.track)===songKey(current.track))||current):undefined;
+  const queue=useMemo(()=>rankCandidates(discoveryRows,seeds,discoveryMemory,current?[...consumed,current.track]:consumed),[discoveryRows,seeds,discoveryMemory,current,consumed]);
+  const weights=routeWeights(discoveryMemory),loading=Object.values(progress).some(p=>p.state==="loading");
   const plan=recoveryJobs(Object.values(progress),autoAttempts.current);
   const finding=loading||recoveryBusy||(!current&&!ranked.length&&plan.length>0);
-  const emptyMessage=emptyStationMessage(rows,seeds,memory,consumed,Object.values(progress));
+  const emptyMessage=emptyStationMessage(discoveryRows,seeds,discoveryMemory,consumed,Object.values(progress));
   useEffect(()=>{
     const c=stationRequest.current;
     if(!hydrated||current||ranked.length||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
@@ -121,14 +123,14 @@ export function DiscoveryStation(){
       setProgress(p=>({...p,[key]:{...job,state:d.state,count:d.rows.length,note:d.note,nextOffset:d.nextOffset}}));
     }catch(e){if(!signal.aborted)setProgress(p=>({...p,[key]:{...job,state:"error",count:0,note:e instanceof Error?e.message:"Source unavailable.",nextOffset:null}}));}
   }
-  async function start(track:StationTrack,saved=liked,preserve=false,consumedTrack?:StationTrack){
-    if(!preserve){group.current=crypto.randomUUID();exposure.current=null;}
-    const tracks=stationSeeds(track,saved);stationRequest.current?.abort();const controller=new AbortController();stationRequest.current=controller;
+  async function start(track:StationTrack){
+    group.current=crypto.randomUUID();exposure.current=null;
+    const tracks=stationSeeds(track);stationRequest.current?.abort();const controller=new AbortController();stationRequest.current=controller;
     autoAttempts.current=new Set();recoveryLock.current=false;setRecoveryBusy(false);
-    setOrigin(track);setSeeds(tracks);if(!preserve||consumedTrack)setCurrent(undefined);setConsumed(previous=>preserve?(consumedTrack?[...previous,consumedTrack]:previous):[]);
+    setOrigin(track);setSeeds(tracks);setCurrent(undefined);setConsumed([]);
     const starter=tracks.flatMap(t=>asCredits(t,recommend(t.id,stationCatalog)));
-    setRows(previous=>mergeCandidates([...(preserve?previous.map(r=>({...r,paths:r.paths.filter(p=>tracks.some(t=>t.id===p.seedId))})).filter(r=>r.paths.length):[]),...starter]));
-    setNotice(preserve?"Liked. Updating your recommendations automatically…":"Finding your next song…");
+    setRows(mergeCandidates(starter));
+    setNotice("Finding songs connected to your selected song…");
     const order:Route[]=["related-artists","similar-tracks","credits"];
     const jobs=order.flatMap(route=>tracks.map(seed=>({seed,route,offset:0})));
     setProgress(Object.fromEntries(jobs.map(j=>[jobKey(j),{...j,state:"loading",count:0,note:"Queued…",nextOffset:null}])));
@@ -151,7 +153,8 @@ export function DiscoveryStation(){
       const next=addLiked(liked,track);setLiked(next);
       if(row){feedback("like",row);setMemory(m=>recordVote(m,row,"like"));}
       else setMemory(m=>{const votes={...m.votes};if(votes[songKey(track)]?.vote==="dislike")delete votes[songKey(track)];return {...m,votes};});
-      void start(origin||track,next,true,row?.track);
+      if(row){setConsumed(previous=>[...previous,track]);setCurrent(undefined);}
+      setNotice("Saved to your likes and excluded from discovery. Your starting song has not changed.");
     }catch(e){if(!controller.signal.aborted)setNotice(e instanceof Error?e.message:"Your like could not be saved. Try again.");}finally{if(!controller.signal.aborted)setLiking(false);}
   }
   function retry(p:Progress,more=false){const c=stationRequest.current;if(!c||c.signal.aborted)return;void runJob({...p,offset:more?(p.nextOffset??p.offset):p.offset},c.signal);}
@@ -161,11 +164,12 @@ export function DiscoveryStation(){
   function exportTraining(){const url=URL.createObjectURL(new Blob([JSON.stringify(exportLearning(learning),null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="genre-atlas-ratings-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   const returnTo=(origin?"/?stationTrack="+encodeURIComponent(origin.id):"/")+"#discovery-station";
   const likedSong=(track:StationTrack)=>liked.some(t=>songKey(t)===songKey(track));
-  function likeControl(track:StationTrack,row?:Candidate){return userId?<button disabled={liking||!hydrated||likedSong(track)} aria-label={likedSong(track)?"Liked "+track.title:"Like "+track.title} onClick={()=>void like(track,row)}><ThumbsUp size={16} aria-hidden="true"/>{liking?"Saving…":likedSong(track)?"Liked":"Like"}</button>:<button className="station-signin" disabled={account.busy||!account.ready} onClick={()=>void account.signIn(returnTo)}><ThumbsUp size={16} aria-hidden="true"/>카카오 로그인 후 좋아요</button>;}
+  function removeLiked(track:StationTrack){setLiked(previous=>previous.filter(t=>songKey(t)!==songKey(track)));setNotice('Removed from liked songs. Your starting song and past ratings were not changed.');}
+  function likeControl(track:StationTrack,row?:Candidate){return userId?<button disabled={liking||!hydrated} aria-pressed={likedSong(track)} aria-label={likedSong(track)?"Remove "+track.title+" from liked songs":"Like "+track.title} onClick={()=>likedSong(track)?removeLiked(track):void like(track,row)}><ThumbsUp size={16} aria-hidden="true"/>{liking?"Saving…":likedSong(track)?"Remove like":"Like"}</button>:<button className="station-signin" disabled={account.busy||!account.ready} onClick={()=>void account.signIn(returnTo)}><ThumbsUp size={16} aria-hidden="true"/>카카오 로그인 후 좋아요</button>;}
   const sources=shown?[...new Map(shown.reasons.flatMap(r=>r.sources).map(s=>[s.url,s])).values()]:[];
   return <section className="station" id="discovery-station" aria-labelledby="station-title">
     <header className="station-header"><div><span className="eyebrow">MORE WAYS INTO YOUR SOUND</span><h2 id="station-title"><Radio size={25} aria-hidden="true"/> Discovery Station</h2></div><span className="station-stamp">YOUR MIX</span></header>
-    <p className="station-intro">One song is enough. Your likes shape what comes next.</p>
+    <p className="station-intro">Discover from your selected song only. Already liked songs are excluded.</p>
     <div className="station-layout"><div className="station-picker">
       <form onSubmit={e=>{e.preventDefault();void search();}}><label htmlFor="station-search">Find a starting song</label><div className="station-search"><Search size={18} aria-hidden="true"/><input id="station-search" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Song or artist" maxLength={120}/><button disabled={searching}>{searching?"Searching…":"Search"}</button></div></form>
       <p className="station-meta">Select one song. Recommendations start right away.</p>
@@ -178,16 +182,16 @@ export function DiscoveryStation(){
       {canExpand&&!searching&&<button onClick={()=>void search(searched,limit===40?100:200)}>More search results</button>}
       {searched&&!searching&&<button onClick={()=>void search(searched,40,"musicbrainz")}>Other catalog versions</button>}
     </div><div className="station-output">
-      <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Like a song to shape what comes next.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
+      <div className="station-status" role="status" aria-live="polite">{notice||(shown?"Recommendations are based only on your selected song.":seeds.length?finding?"Finding your next song…":"Source checks finished.":"Find one song you want to explore.")}</div>
       {finding&&<p className="station-meta" role="status">Checking live catalogs and credits independently. Available recommendations appear as soon as they arrive.</p>}
       {shown&&stationCatalog.some(t=>t.id===shown.track.id)&&<p className="station-meta">Source-checked starter collection · this connection was stored in advance, not found by a live lookup.</p>}
-      {origin&&<div className="station-origin"><div className="station-origin-copy"><span>STARTING FROM</span><b>{origin.title} / {origin.artist}</b><small>Excluded album: {origin.album}</small><div className="station-feedback">{likeControl(origin)}</div>{seeds.length>1&&<small>Also shaped by {seeds.length-1} of your recent likes. Their albums are excluded too.</small>}</div><StationArtwork key={origin.id} track={origin} size="seed"/></div>}
+      {origin&&<div className="station-origin"><div className="station-origin-copy"><span>STARTING FROM</span><b>{origin.title} / {origin.artist}</b><small>Excluded album: {origin.album}</small><div className="station-feedback">{likeControl(origin)}</div><small>Selected-song connections only · saved likes are excluded, not used as recommendation seeds.</small></div><StationArtwork key={origin.id} track={origin} size="seed"/></div>}
       {shown?<><article className="station-current" key={shown.track.id}><div className="station-track-heading"><div className="station-track-copy"><span className="eyebrow">NEXT DISCOVERY</span><h3>{shown.track.title}</h3><p className="station-artist">{shown.track.artist}</p><p className="station-meta">{shown.track.album}</p><div className="station-tags">{[...new Set(shown.paths.map(p=>routeLabels[p.route]))].map(label=><span key={label}>{label}</span>)}</div></div><StationArtwork key={shown.track.id+shown.track.album} track={shown.track} size="recommendation"/></div>
         <div className="station-actions"><a className="primary" href={trackYouTubeUrl(shown.track)} target="_blank" rel="noreferrer"><Play size={17}/>Listen on YouTube</a><button disabled={liking} onClick={()=>advance()}><SkipForward size={17}/>Next track</button></div>
         <div className="station-feedback">{likeControl(shown.track,shown)}<button disabled={liking} onClick={()=>advance("dislike")}><ThumbsDown size={16}/>Not for me</button><button disabled={liking} onClick={()=>void start(shown.track)}>Explore this song</button></div>
-        <details className="station-evidence"><summary>Why this track?</summary><ul>{shown.reasons.map((reason,i)=><li key={i}><b>{reason.label}</b><span>{reason.detail}</span></li>)}</ul><div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div><small>Connections are discovery signals, not a guarantee of the same sound. {model.active?"Your local model orders upcoming songs from explicit feedback.":"Fallback route weights reflect your saved feedback."}</small></details>
+        <details className="station-evidence"><summary>Why this track?</summary><ul>{shown.reasons.map((reason,i)=><li key={i}><b>{reason.label}</b><span>{reason.detail}</span></li>)}</ul><div className="station-sources">{sources.map(s=><a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.label}</a>)}</div><small>Connections are discovery signals, not a guarantee of the same sound. Discovery uses neutral source weights, without saved-like or learned preference boosts.</small></details>
       </article><details className="station-upnext"><summary>Up next · {queue.length}</summary>{queue.slice(0,4).map(row=><div key={row.track.id}><span><b>{row.track.title}</b><small>{row.track.artist}</small></span><span>{routeLabels[row.paths[0].route]}</span></div>)}</details></>:<div className="station-empty" role="status"><Radio size={42} strokeWidth={1}/><h3>{!seeds.length?"It starts with one song.":finding?"Finding your next discovery…":emptyMessage.title}</h3><p>{!seeds.length?"Search a song and select it. No playlist to prepare.":finding?"We’re checking more candidates before calling this mix finished. Your album and artist limits stay in place.":emptyMessage.detail}</p>{seeds.length>0&&!finding&&(emptyMessage.failed||emptyMessage.more)&&<button onClick={retrySources}>{emptyMessage.failed?"Retry unavailable sources":"Find more songs"}</button>}</div>}
-      {userId&&hydrated&&<LikedSongs liked={liked} disabled={liking} onExplore={track=>void start(track)} onRemove={track=>{setLiked(previous=>previous.filter(t=>songKey(t)!==songKey(track)));setNotice('Removed from liked songs. Past ratings were not changed.');}}/>}
+      {userId&&hydrated&&<LikedSongs liked={liked} disabled={liking} onExplore={track=>void start(track)} onRemove={removeLiked}/>}
       {userId&&hydrated&&<PlaylistImport key={userId} onAdd={async tracks=>{
         const expected=userId;
         const response=await accountFetch('/api/station/session');
@@ -197,10 +201,10 @@ export function DiscoveryStation(){
         setLiked(previous=>tracks.reduce((result,track)=>addLiked(result,track),previous));
       }}/>}
       {userId&&hydrated&&<LikedPlaylist key={userId+liked.map(songKey).join('|')} userId={userId} liked={liked} memory={memory} learning={learning}/>}
-      <details className="station-learning"><summary><span className="learning-status">{model.active?"LEARNED RANKING / EXPERIMENTAL":"LEARNING / COLLECTING RATINGS"}</span>Your ranking model · {model.labels} ratings</summary><p>{model.message}</p><p>{model.positives} likes · {model.negatives} dislikes · {model.pairs} useful comparisons · {model.groups} comparable starting-song sessions.</p><p>Producer, mastering, sample links, genre overlap, discovery routes and earlier liked artists/creators are recorded when a song is first shown. Missing metadata is marked, not invented. Skips and unanswered suggestions have no training label. YouTube-derived route evidence is excluded from training.</p><p>{model.holdoutAccuracy===null?"Not enough separate sessions for a held-out quality check yet. No recommendation-quality improvement has been established.":"Later-session comparison accuracy: "+Math.round(model.holdoutAccuracy*100)+"%. This small personal test is not a probability of liking a song."}</p><p>The live model is a small pairwise linear learner trained in this browser. CatBoost is available as a separate Python training workflow, not the model currently running here.</p><button disabled={!learning.events.length} onClick={exportTraining}>Export my training records</button><p>The download contains local song identifiers, feature snapshots and your ratings. It does not contain your sign-in ID. Nothing is uploaded by this button.</p></details>
-      {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & fallback weights</summary><p className="station-meta">{model.active?"Learned ranking is active. The weights below are retained only for the fallback ranker.":"Source-based fallback: 1.00× is neutral. Weights change after explicit likes or dislikes; skips do not change them."}</p><div className="station-weights">{routes.map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
+      <details className="station-learning"><summary><span className="learning-status">FEEDBACK RECORDS / NOT APPLIED TO DISCOVERY</span>Saved ratings · {model.labels}</summary><p>General discovery uses only the selected song and neutral source weights. Saved likes and learned preferences do not reorder it. Existing training records are preserved for the separate personal-playlist workflow.</p><p>{model.positives} likes · {model.negatives} dislikes · {model.pairs} useful comparisons · {model.groups} comparable starting-song sessions.</p><p>Confirmed connections and feature snapshots are recorded before explicit feedback. Missing metadata is not invented. Skips and unanswered suggestions have no training label. YouTube-derived route evidence is excluded from training.</p><button disabled={!learning.events.length} onClick={exportTraining}>Export my training records</button><p>The download contains local song identifiers, feature snapshots and your ratings. It does not contain your sign-in ID. Nothing is uploaded by this button.</p></details>
+      {seeds.length>0&&<details className="station-source-status"><summary>Discovery sources & weights</summary><p className="station-meta">Selected song only. All source weights stay neutral at 1.00×; saved likes and learned preference scores are not applied.</p><div className="station-weights">{routes.map(route=><span key={route}>{routeLabels[route]} <b>{weights[route].toFixed(2)}×</b></span>)}</div>{Object.values(progress).map(p=><div className="station-source-row" key={jobKey(p)}><b>{routeLabels[p.route]} · {p.seed.title}</b><span>{p.state==="loading"?p.note:p.state+" · "+p.count+" candidates in this batch"}</span><small>{p.state!=="loading"&&p.note}</small>{(p.state==="error"||p.state==="partial")&&<button onClick={()=>retry(p)}>Retry source</button>}{p.nextOffset!==null&&p.state!=="loading"&&<button onClick={()=>retry(p,true)}>Load more {p.route==="credits"?"credit connections":"related artists"}</button>}</div>)}</details>}
     </div></div>
     <footer className="station-foot"><span>{storageNote||"Preferences stay in this browser. Likes are separated by sign-in; they do not sync between devices."}</span><button disabled={!hydrated||liking} onClick={reset}><RotateCcw size={15}/>Reset saved preferences</button></footer>
-    <details className="station-method"><summary>How this station works</summary><p>Select one song to start. Likes require sign-in and shape discovery from this song and up to four recent likes. Search checks Deezer and Apple in parallel; MusicBrainz provides additional recordings. Related artists and their songs come from Deezer, with YouTube Music and other catalogs as fallbacks. Credits come from MusicBrainz and available Apple song pages. The source-checked starter collection is stored in advance and labelled separately. Last.fm is off without an API key. No YouTube playlist collection, Spotify, BPM scoring or audio analysis is used. Shared credits are not required. Before enough explicit ratings, source-based fallback ranking is used. After sufficient comparisons, a browser-trained pairwise model orders candidates using snapshots from before each rating. The same album, disliked songs, repeated artists and songs shown in the last three days are excluded; the separate liked-song playlist collects its own candidates and applies the positive-comment filter. No provider guarantees every recording. Preferences and training records stay in this browser, separately for each signed-in user; sign-in does not enable cross-device storage.</p></details>
+    <details className="station-method"><summary>How this station works</summary><p>Select one song to start. General discovery collects candidates from that song only, with neutral source weights and no personal ranking boosts. Already liked songs are excluded across catalogs by artist and title; saved likes do not add artists, creators or albums to the search. Likes can be removed without changing past ratings. Search checks Deezer and Apple in parallel; MusicBrainz provides additional recordings. Related artists and their songs come from Deezer, with YouTube Music and other catalogs as fallbacks. Credits come from MusicBrainz and available Apple song pages. The source-checked starter collection is stored in advance and labelled separately. Last.fm is off without an API key. No YouTube playlist collection, Spotify, BPM scoring or audio analysis is used. Shared credits are not required. The selected song's album, disliked songs, repeated artists and songs shown in the last three days are excluded. The separate 10-track playlist uses likes and requires available positive-comment analysis. No provider guarantees every recording. Preferences and training records stay in this browser, separately for each signed-in user; sign-in does not enable cross-device storage.</p></details>
   </section>;
 }

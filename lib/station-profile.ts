@@ -17,5 +17,5 @@ export function readProfile(raw:unknown,signedIn:boolean):StationProfile {
   return {version:2,memory,liked};
 }
 export function addLiked(liked:StationTrack[],track:StationTrack){if(liked.length>=1000&&!liked.some(t=>songKey(t)===songKey(track)))return liked;return [track,...liked.filter(t=>songKey(t)!==songKey(track))];}
-export function stationSeeds(track:StationTrack,liked:StationTrack[]){return [track,...liked.filter(t=>songKey(t)!==songKey(track)).slice(0,4)];}
+export function stationSeeds(track:StationTrack){return [track];}
 export const emptyProfile=():StationProfile=>({version:2,memory:blankMemory(),liked:[]});
