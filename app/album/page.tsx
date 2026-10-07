@@ -6,10 +6,13 @@ import {ReleaseCover} from "@/components/artist-albums";
 import {youtubeSearchUrl} from "@/lib/listen-link";
 import {artistReturnHref,canReturnThroughHistory} from "@/lib/artist-return";
 import collection from "@/lib/album-collection.json";
+import {albumSongHref} from "@/lib/discovery-navigation";
 const duration=(ms:number|null)=>ms==null?"—":Math.floor(ms/60000)+":"+String(Math.floor(ms/1000)%60).padStart(2,"0");
 export default function AlbumPage(){
  const [data,setData]=useState<ReleaseDetail>(),[error,setError]=useState(""),[busy,setBusy]=useState(true),[retry,setRetry]=useState(0),[artist,setArtist]=useState(""),[returnKey,setReturnKey]=useState<string|null>(null),[collectionSource,setCollectionSource]=useState("");
  const collectionAlbum=[...collection.albums,...collection.rightColumn].find(a=>a.sourceUrl===collectionSource);
+ const [albumPath,setAlbumPath]=useState("");
+ useEffect(()=>setAlbumPath(window.location.pathname+window.location.search),[]);
  const wikiSource=data?.release.provider==="wikipedia"?"Wikipedia":data?.release.provider==="namuwiki"?"NamuWiki":"";
  useEffect(()=>{const c=new AbortController();const p=new URLSearchParams(window.location.search);setArtist(p.get("artist")||"");setReturnKey(p.get("return"));setBusy(true);setError("");
  const source=p.get("collection")||"";setCollectionSource(source);
@@ -23,6 +26,6 @@ export default function AlbumPage(){
  <section className="record-hero"><ReleaseCover key={data.release.id} release={data.release} large/><div className="record-heading"><span className="eyebrow">THE RECORD / {data.release.types.join(" + ")}</span><h1>{data.release.title}</h1><p className="record-artist">{data.release.artist}</p><dl><div><dt>{wikiSource?"Released":data.release.provider==="musicbrainz"?"First released":"Edition released"}</dt><dd>{data.release.date||"Unknown"}</dd></div><div><dt>{wikiSource?"Tracks in this listing":"Tracks in this edition"}</dt><dd>{data.tracks.length}{wikiSource&&!data.complete?" · partial edition":data.complete?"":" / "+data.totalTracks}</dd></div><div><dt>{wikiSource?"Track listing":"Edition"}</dt><dd>{data.edition||"Catalog edition"}{data.editionDate?" · "+data.editionDate:""}</dd></div></dl><a href={data.release.url} target="_blank" rel="noreferrer">{wikiSource?"Track-list source · "+wikiSource:"View catalog source"}</a></div></section>
  <section className="record-tracks" aria-label="Album tracks">{!data.complete&&!wikiSource&&<p role="status">This catalog returned a partial track list. Check the source for missing tracks.</p>}
  {wikiSource&&<p className="muted">{data.note}</p>}
- <div className="track-table-wrap"><table aria-label="Track list"><thead><tr><th scope="col">#</th><th scope="col">Title</th><th scope="col">Time</th></tr></thead><tbody>{data.tracks.map((t,i)=><tr key={t.id+":"+i}><td>{data.tracks.some(x=>x.disc>1)?t.disc+".":""}{t.number}</td><td><a href={youtubeSearchUrl(t.artist+" "+t.title)} target="_blank" rel="noreferrer">{t.title}</a></td><td>{duration(t.durationMs)}</td></tr>)}</tbody></table></div></section></>}
+ <div className="track-table-wrap"><table aria-label="Track list"><thead><tr><th scope="col">#</th><th scope="col">Title</th><th scope="col">Time</th></tr></thead><tbody>{data.tracks.map((t,i)=><tr key={t.id+":"+i}><td>{data.tracks.some(x=>x.disc>1)?t.disc+".":""}{t.number}</td><td><div className="record-track-actions"><a href={youtubeSearchUrl(t.artist+" "+t.title)} target="_blank" rel="noreferrer">{t.title}</a><a className="record-discover-song" href={albumSongHref(t,data.release,albumPath)} aria-label={"Discover songs from "+t.title}>Discover ↗</a></div></td><td>{duration(t.durationMs)}</td></tr>)}</tbody></table></div></section></>}
  <footer>GENRE ATLAS / THE DISCOGRAPHY</footer></main>;
 }

@@ -10,6 +10,7 @@ import "./artist-cd-player.css";
 import "./discovery-station.css";
 import "./releases.css";
 import "./station-learning.css";
+import "./integrated-discovery.css";
 
 export const metadata: Metadata = {
   title: "Genre Atlas — Music Discovery",

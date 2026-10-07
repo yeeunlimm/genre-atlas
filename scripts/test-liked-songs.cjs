@@ -7,5 +7,5 @@ const empty=render([]);assert.ok(empty.includes('No liked songs yet'));assert.ok
 const populated=render([{id:'fixture',title:'Song <test>',artist:'Artist',album:'Album'}]);
 assert.ok(populated.includes('Song &lt;test&gt;'));assert.ok(populated.includes('Remove like'));assert.ok(populated.includes('Explore song'));assert.ok(populated.includes('id="liked-songs"'));
 const station=fs.readFileSync('components/hybrid-discovery-station.tsx','utf8');assert.ok(station.includes('href="#liked-songs"'));assert.ok(station.includes('userId===account.userId&&userId&&hydrated'));assert.ok(station.includes('createPortal('));assert.ok(station.includes('compact liked={liked}'));
-const home=fs.readFileSync('app/page.tsx','utf8');assert.ok(home.includes('account.userId?<div ref={setPlaylistTarget}'));assert.ok(home.includes('<DiscoveryStation playlistTarget={playlistTarget}/>'));
+const home=fs.readFileSync('app/page.tsx','utf8');assert.ok(home.includes('account.userId?<div ref={setPlaylistTarget}'));assert.ok(home.includes('<DiscoveryStation playlistTarget={playlistTarget} searchTarget={songSearchTarget}'));
 console.log('PASS: visible liked-song list, empty guidance, safe text, listen/explore/remove actions and signed-in entry link.');

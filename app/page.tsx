@@ -16,6 +16,7 @@ import {englishText} from "@/lib/english-display";
 import {youtubeSearchUrl} from "@/lib/listen-link";
 import {genreLabel,knownGenreLabel,genreDisplayState,type Genre} from "@/lib/genre-view";
 import {ARTIST_CLIENT_TIMEOUT_MS} from "@/lib/music-timeouts";
+import {discoveryModeFromUrl,type DiscoveryMode} from "@/lib/discovery-navigation";
 type Result={artist?:Artist;related:Artist[];artists:Artist[];provider:"YouTube Music"|"Deezer";state:"ready"|"empty"|"choose-artist";notice:string;error?:string};
 const compact=(n:number|null)=>n===null?"Unavailable":new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(n);
 const audienceMetric=(a:Artist)=>a.metric==="deezer-fans"?"Deezer fans":"Monthly audience";
@@ -37,6 +38,20 @@ function LoadingArtwork({album,artistName}:{album?:AlbumArtwork;artistName?:stri
 export default function Home(){
  const account=useAccount();
  const [playlistTarget,setPlaylistTarget]=useState<HTMLDivElement|null>(null);
+ const [songSearchTarget,setSongSearchTarget]=useState<HTMLDivElement|null>(null);
+ const [discoveryMode,setDiscoveryMode]=useState<DiscoveryMode>("artist");
+ const switchDiscovery=useCallback((next:DiscoveryMode,scroll=false)=>{
+  setDiscoveryMode(next);
+  const url=new URL(window.location.href);url.hash=next==="song"?"discovery-station":"artist-discover";
+  if(url.href!==window.location.href)window.history.pushState(window.history.state,"",url);
+  if(scroll)requestAnimationFrame(()=>document.getElementById(next==="song"?"discovery-station":"artist-discover")?.scrollIntoView({block:"start",behavior:"instant"}));
+ },[]);
+ useEffect(()=>{
+  const sync=()=>setDiscoveryMode(discoveryModeFromUrl(new URL(window.location.href)));
+  sync();const frame=requestAnimationFrame(()=>{if(window.location.hash==="#discovery-station")document.getElementById("discovery-station")?.scrollIntoView({block:"start",behavior:"instant"});});
+  window.addEventListener("popstate",sync);window.addEventListener("hashchange",sync);
+  return()=>{cancelAnimationFrame(frame);window.removeEventListener("popstate",sync);window.removeEventListener("hashchange",sync);};
+ },[]);
  const [query,setQuery]=useState(""),[artist,setArtist]=useState<Artist|null>(null),[candidates,setCandidates]=useState<Artist[]>([]),[related,setRelated]=useState<Artist[]>([]);
  const [genres,setGenres]=useState<Genre[]>([]),[genreSource,setGenreSource]=useState(""),[genreStatus,setGenreStatus]=useState("Search an artist to explore genres.");
  const [genreRetry,setGenreRetry]=useState(0);
@@ -85,6 +100,7 @@ export default function Home(){
  },[resetGenre,loadArtistGenres]);
  const search=useCallback(async(name:string,displayName=name,initialMode:"related"|"albums"="related")=>{
   if(!name.trim()){setError("Enter an artist name.");return {ok:false};}
+  switchDiscovery("artist");
   clearArtistReturnMarker();setAlbumReturn(null);
   const token=++run.current;resetGenre();setQuery(displayName);setBusy("Searching artists…");setError("");setNote("");setCandidates([]);setFallbackChoices([]);setArtist(null);setRelated([]);setGenres([]);setGenreSource("");setGenreStatus("Select an artist from the results.");
   try{const d=await music("search",name.trim());if(token!==run.current)return {ok:false};
@@ -94,7 +110,7 @@ export default function Home(){
    setCandidates(d.artists);setNote("Choose the artist you are looking for.");return {ok:true,candidates:d.artists.map(a=>a.name)};
   }catch(e){if(token===run.current)setError((e as Error).message);return {ok:false,error:(e as Error).message};}
   finally{if(token===run.current)setBusy("");}
- },[selectArtist,resetGenre]);
+ },[selectArtist,resetGenre,switchDiscovery]);
  async function exploreGenre(g:Genre,append=false){
   const token=++genreRun.current,seed=run.current;
   genreRequest.current?.abort();const controller=new AbortController();genreRequest.current=controller;
@@ -145,12 +161,16 @@ export default function Home(){
  return <main>
  <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY / VOL. 01</span><nav className="station-nav" aria-label="Music discovery"><a href="#discovery-station">Discovery Station</a><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a><AccountButton/></nav></header>
  <div className="workspace">
- <section className="search-deck" aria-label="Artist discovery">
+ <section className="search-deck" aria-label="Music discovery">
  <div className="search-main"><img className="discovery-ornament" src="/reference/white-ornate-clef-v1.png" alt="" aria-hidden="true" width={220} height={390}/><h1>DISCOVER</h1>
+ <div className="discovery-switch" role="group" aria-label="Search for"><button aria-pressed={discoveryMode==="artist"} onClick={()=>switchDiscovery("artist")}>Artist</button><button aria-pressed={discoveryMode==="song"} onClick={()=>switchDiscovery("song")}>Song</button></div>
+ <div hidden={discoveryMode!=="artist"}>
  <form className="search-form" onSubmit={e=>{e.preventDefault();void search(query);}}><Search size={21}/><label className="sr-only" htmlFor="artist-search">Artist name</label><input id="artist-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search an artist" maxLength={100}/><button className="primary" type="submit" aria-label="Search artists">Search <ArrowRight size={18}/></button></form>
  <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","A$AP Rocky","Kanye West"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
+ <div ref={setSongSearchTarget} hidden={discoveryMode!=="song"} className="song-search-slot"/></div>
  {!account.ready?<div className="personal-playlist-slot" role="status">Checking sign-in…</div>:account.userId?<div ref={setPlaylistTarget} className="personal-playlist-slot" aria-label="Your playlist"/>:<AlbumWall onExploreArtist={name=>{void search(name).then(()=>requestAnimationFrame(()=>{(document.querySelector(".candidate-results")||document.getElementById("artist-discover"))?.scrollIntoView({block:"start",behavior:"instant"});}));}}/>}
  </section>
+ <div hidden={discoveryMode!=="artist"} className="artist-workspace">
  {error&&<div className="message error" role="alert">{error}<button onClick={()=>void search(query)}>Try again</button></div>}
  {candidates.length>0&&<section className="candidate-results" aria-label="Artist search results"><h2>SELECT ARTIST</h2><div>{candidates.map(a=><button key={a.id} onClick={()=>void selectArtist(a)}><b>{englishText(a.name,"Artist")}</b><span>{compact(a.audience)} {audienceMetric(a).toLowerCase()}</span><ArrowRight size={17}/></button>)}</div></section>}
  <section className="explorer" id="artist-discover">
@@ -180,7 +200,8 @@ export default function Home(){
  </>}
  </TabsContent></Tabs></section></section>
  <details className="method"><summary>About the data</summary><p>Related artists come only from YouTube Music’s “Fans might also like”. If that source rejects a request or returns no list, we show its availability instead of switching to Deezer. Word sizes use YouTube Music monthly audience. Unknown values use the smallest size. Genre discovery is a separate NamuWiki collection, built from the genre article and its linked artist directories. Body-linked artists require a matching genre tag; artist-list entries are checked as musicians. Genre sizes use document interest counts, not monthly audience. Only the loaded, verified portion is shown; use Load more to continue. Unavailable genre data never falls back to the related list. Genres are shown only with verified English names; unverified genre names are hidden until they can be checked. Other Korean names without an English alias may use romanized display text, which is not an official translation. Listen links open ordinary YouTube search. Loading artwork comes from the artist’s public Albums section, not a most-popular-album ranking.</p></details>
- <DiscoveryStation playlistTarget={playlistTarget}/>
+ </div>
+ <DiscoveryStation playlistTarget={playlistTarget} searchTarget={songSearchTarget} active={discoveryMode==="song"} onRequestSong={()=>switchDiscovery("song",true)} onExploreArtist={name=>{switchDiscovery("artist",true);void search(name);}}/>
  <footer><span>GENRE ATLAS © 2026</span><span>Unofficial discovery tool. Data availability may vary.</span></footer>
  </div>
  <Sheet open={!!detail} onOpenChange={o=>{if(!o)setDetail(null);}}><SheetContent className="detail-sheet"><SheetHeader><span className="eyebrow">ARTIST / DETAILS</span><SheetTitle className="detail-title">{englishText(detail?.name,"Artist")}</SheetTitle><SheetDescription>{detail?.wiki?"From the NamuWiki genre collection. Not a related-artist recommendation.":"Related to "+englishText(artist?.name,"Artist")+" on "+(detail?.provider||"YouTube Music")+"."}</SheetDescription></SheetHeader>{detail&&<div className="sheet-body"><div className="stat"><Users/><span>{detail.wiki?"NamuWiki document interest":audienceMetric(detail)}</span><strong>{compact(detail.wiki?detail.wiki.stars:detail.audience)}</strong></div><p className="muted">Source: {detail.wiki?"NamuWiki document bookmarks":englishText(detail.audienceLabel)}<br/>Checked: {new Date(detail.checkedAt).toLocaleString("en-US")}<br/>{detail.wiki?"Document interest is a platform-specific proxy, not listener counts.":detail.metric==="deezer-fans"?"Fan count on Deezer, not monthly listeners or plays.":"Rounded figures from the public artist page."}</p>{detail.wiki&&<a className="source-link" href={detail.wiki.sourceUrl} target="_blank" rel="noreferrer">{detail.wiki.evidence==="list"?"Listed in the genre artist section":"Linked from genre; artist genre tag verified"} <ArrowUpRight size={13}/></a>}<a className="source-link" href={detail.url} target="_blank" rel="noreferrer">Artist source: {detail.wiki?"NamuWiki":detail.provider||"YouTube Music"} <ArrowUpRight size={13}/></a><a className="primary" href={youtubeSearchUrl(detail.name)} target="_blank" rel="noreferrer"><Play size={17}/> Listen on YouTube <ArrowUpRight size={17}/></a><button className="secondary" onClick={()=>{const a=detail;setDetail(null);setQuery(englishText(a.name,"Artist"));if(a.wiki)void search(a.wiki.title,englishText(a.name,"Artist"));else void selectArtist(a);}}><RotateCcw size={16}/> Explore this artist</button></div>}</SheetContent></Sheet>
