@@ -24,7 +24,9 @@ export function AccountProvider({children}:{children:ReactNode}){
     if(busy)return;setBusy(true);setError("");
     try{
       sessionStorage.setItem(AUTH_RETURN_KEY,safeAuthReturn(returnTo??location.pathname+location.search+location.hash));
-      const {error}=await browserAuth().auth.signInWithOAuth({provider:"kakao",options:{redirectTo:location.origin+"/auth/callback",scopes:"profile_nickname profile_image"}});
+      // `scopes` appends to Kakao's default account_email scope in Supabase Auth.
+      // Override the provider scope instead; the project also allows users without email.
+      const {error}=await browserAuth().auth.signInWithOAuth({provider:"kakao",options:{redirectTo:location.origin+"/auth/callback",queryParams:{scope:"profile_nickname profile_image"}}});
       if(error)throw error;
     }catch{setError("Could not start Kakao sign-in. Allow browser storage and try again.");setBusy(false);}
   }

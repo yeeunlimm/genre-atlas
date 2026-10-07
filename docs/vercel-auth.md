@@ -22,6 +22,11 @@ Kakao's Redirect URI stays `https://<project-ref>.supabase.co/auth/v1/callback`.
 
 Kakao must be enabled with profile nickname/image consent and Supabase's
 "Allow users without an email" option if no email permission is available.
+The hosted provider still adds `account_email` when using the SDK `scopes`
+option. Use `queryParams.scope = "profile_nickname profile_image"` instead.
+Verified against the production authorize endpoint on 2026-10-07: its 302
+redirect requests only those two scopes. Recheck this on Auth upgrades; if
+scope overrides stop being supported, do not silently request email access.
 
 The browser uses PKCE, and the callback exchanges a single-use code. Likes are
 authorized by a fresh Supabase `getUser(token)` check on the server. Forwarded
