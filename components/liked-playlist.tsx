@@ -31,14 +31,15 @@ export function LikedPlaylist({userId,liked,memory,learning}:{userId:string;like
     const c=new AbortController();controller.current=c;setBusy(true);setError('');setPlaylist(null);setShortlist([]);setReviews({});
     setNote('Choosing up to 20 candidates from your five most recent likes…');
     try{
-      async function json<T>(url:string):Promise<T>{const response=await accountFetch(url,{signal:AbortSignal.any([c.signal,AbortSignal.timeout(40000)])});const data=await response.json() as T & {error?:string};if(!response.ok)throw new Error(data.error||'A playlist source failed.');return data;}
+      async function json<T>(url:string,timeout=40000):Promise<T>{if(timeout<=0)throw new Error('Candidate collection time limit reached.');const response=await accountFetch(url,{signal:AbortSignal.any([c.signal,AbortSignal.timeout(timeout)])});const data=await response.json() as T & {error?:string};if(!response.ok)throw new Error(data.error||'A playlist source failed.');return data;}
+      const candidateDeadline=Date.now()+90000;
       const result=await collectLikedCandidates(liked,async(seed,route)=>{
         if(route==='credits'){
-          const data:LiveStationResult=await json('/api/station?'+new URLSearchParams({id:seed.id,offset:'0'}));
+          const data:LiveStationResult=await json('/api/station?'+new URLSearchParams({id:seed.id,offset:'0'}),Math.min(40000,candidateDeadline-Date.now()));
           return data.rows.filter(r=>r.reasons.some(x=>x.kind==='credit'||x.kind==='sample')).map(row=>({...row,paths:[{route:'credits' as const,seedId:seed.id,confidence:Math.min(.95,.6+row.score*.035)}]}));
         }
-        return (await json<{rows:Candidate[]}>('/api/station/discover?'+new URLSearchParams({id:seed.id,route,offset:'0'}))).rows;
-      },c.signal);
+        return (await json<{rows:Candidate[]}>('/api/station/discover?'+new URLSearchParams({id:seed.id,route,offset:'0'}),Math.min(40000,candidateDeadline-Date.now()))).rows;
+      },c.signal,(completed,total)=>setNote('Choosing candidates · '+completed+' / '+total+' sources checked…'));
       c.signal.throwIfAborted();
       const model=trainRanker(learning);
       const score=model.active?(row:Candidate)=>modelScore(model,featureVector(row,liked,learning)):undefined;

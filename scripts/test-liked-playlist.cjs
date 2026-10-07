@@ -21,8 +21,9 @@ const now=Date.now(),summary=score=>({status:'ready',score,sampleCount:3,analyze
  assert.equal(emptyLookups,0);assert.deepEqual(empty.rows,[]);
  const all=Array.from({length:15},(_,i)=>row('song'+i));
  assert.equal(selectLikedPlaylist(all,[seed],blankMemory(),{},new Map(all.map(r=>[reviewKey(r.track),summary(.2)])),now).length,10);
- let calls=0;const result=await collectLikedCandidates([seed],async(s,route)=>{calls++;assert.equal(s.id,seed.id);if(route==='credits')throw new Error('fixture failure');return [row('live')];},new AbortController().signal);
+ let calls=0;const progress=[];const result=await collectLikedCandidates([seed],async(s,route)=>{calls++;assert.equal(s.id,seed.id);if(route==='credits')throw new Error('fixture failure');return [row('live')];},new AbortController().signal,(done,total)=>progress.push([done,total]));
  assert.equal(calls,3);assert.equal(result.failed,1);assert.equal(result.rows.length,1);
+ assert.deepEqual(progress,[[1,3],[2,3],[3,3]]);
  const aborted=new AbortController();aborted.abort();await assert.rejects(collectLikedCandidates([seed],async()=>[],aborted.signal));
  const component=fs.readFileSync('components/liked-playlist.tsx','utf8');
  assert.ok(!component.includes('...queue'));assert.ok(component.includes("await json<ReviewAvailability>('/api/station/reviews')"));

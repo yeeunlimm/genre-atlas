@@ -14,10 +14,10 @@ export function shortlistLikedCandidates(rows:Candidate[],liked:StationTrack[],m
 }
 
 // No station queue/current song is accepted by this API.
-export async function collectLikedCandidates(liked:StationTrack[],lookup:(seed:StationTrack,route:'related-artists'|'similar-tracks'|'credits')=>Promise<Candidate[]>,signal:AbortSignal){
+export async function collectLikedCandidates(liked:StationTrack[],lookup:(seed:StationTrack,route:'related-artists'|'similar-tracks'|'credits')=>Promise<Candidate[]>,signal:AbortSignal,onProgress?:(completed:number,total:number)=>void){
   const seeds=liked.slice(0,5),jobs=seeds.flatMap(seed=>(['related-artists','similar-tracks','credits'] as const).map(route=>({seed,route})));
-  const rows:Candidate[]=[];let cursor=0,failed=0;
-  await Promise.all([0,1].map(async()=>{while(cursor<jobs.length){signal.throwIfAborted();const job=jobs[cursor++];try{rows.push(...await lookup(job.seed,job.route));}catch(e){signal.throwIfAborted();failed++;}}}));
+  const rows:Candidate[]=[];let cursor=0,failed=0,completed=0;
+  await Promise.all([0,1].map(async()=>{while(cursor<jobs.length){signal.throwIfAborted();const job=jobs[cursor++];try{rows.push(...await lookup(job.seed,job.route));}catch(e){signal.throwIfAborted();failed++;}finally{if(!signal.aborted)onProgress?.(++completed,jobs.length);}}}));
   return {rows:mergeCandidates(rows),failed,total:jobs.length};
 }
 export function selectLikedPlaylist(rows:Candidate[],liked:StationTrack[],memory:Memory,recent:Record<string,number>,reviews:Map<string,ReviewSummary>,now=Date.now(),score?:(row:Candidate)=>number){

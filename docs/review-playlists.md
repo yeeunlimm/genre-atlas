@@ -5,6 +5,8 @@
 - Rank independent candidates from the five latest likes FIRST, excluding liked
   recordings/albums, dislikes, repeat history and duplicate artists. Freeze at
   most 20 candidates. No discovery queue or station selection is reused.
+- Candidate collection reports completed sources and shares a 90-second client
+  request budget; failing/timed-out sources do not discard successful results.
 - Only those candidates are sent to `/api/station/reviews`. The authenticated,
   same-origin POST accepts 1–20 distinct tracks and streams a result per track.
 - For each track, search at most five music videos, fetch their metadata and
