@@ -9,7 +9,8 @@ assert.equal((html.match(/class="album-tile"/g)||[]).length,collection.albums.le
 assert.equal((html.match(/aria-pressed="true"/g)||[]).length,1);
 assert.ok(html.includes('class="album-title-link" href="/album?collection='));
 assert.ok(html.includes('class="album-artist-link"'));
-assert.ok(html.includes('Scroll albums up')&&html.includes('Scroll albums down'));
+assert.ok(!html.includes('Scroll albums up')&&!html.includes('Scroll albums down'));
+assert.ok(html.includes('aria-label="Choose a collection album" tabindex="0"'));
 assert.ok(html.includes('class="album-browser"')&&!html.includes('SCROLL TO EXPLORE'));
 assert.ok(!html.includes('role="dialog"')&&!html.includes('aria-haspopup'));
 const home=fs.readFileSync('app/page.tsx','utf8');

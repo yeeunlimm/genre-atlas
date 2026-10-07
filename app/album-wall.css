@@ -2,7 +2,7 @@
 .search-deck{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:center}
 .album-wall,.personal-playlist-slot{min-width:0;width:100%;max-width:540px;justify-self:end}
 .album-wall-heading{display:flex;justify-content:space-between;gap:12px;font:11px/1.5 monospace;letter-spacing:1px;color:#aaaab2}
-.album-wall-body{display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:24px;align-items:center;margin-top:12px}
+.album-wall-body{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:24px;align-items:center;margin-top:12px}
 .album-feature{width:min(100%,190px);margin:0 auto}
 .album-record{position:relative;display:block;width:100%;aspect-ratio:1/1.35;isolation:isolate}
 .album-vinyl{position:absolute;display:block;left:3%;top:11%;width:94%;height:auto;aspect-ratio:1;transform:rotate(-9deg);transition:transform .3s ease;pointer-events:none;filter:grayscale(1)}
@@ -15,8 +15,7 @@
 .album-title-link{color:#eee;font-weight:600}
 .album-artist-link{background:none;border:0;padding:0 4px;color:#bcbcc5;cursor:pointer}
 .album-title-link:hover,.album-artist-link:hover{text-decoration:underline;text-underline-offset:4px;color:#fff}
-.album-browser{width:82px;justify-self:end;display:grid;gap:4px}
-.album-scroll-button{width:100%;min-height:36px;background:transparent;border:1px solid #45454d;color:#eee;cursor:pointer}
+.album-browser{width:64px;justify-self:end}
 .album-scroll-rail{display:flex;flex-direction:column;gap:12px;height:290px;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scroll-snap-type:y proximity;padding:8px 6px;scrollbar-width:thin;scrollbar-color:#777 #222}
 .album-tile{position:relative;display:block;flex:0 0 auto;width:100%;min-width:0;padding:0;border:0;border-radius:0;background:transparent;cursor:pointer;scroll-snap-align:start}
 .album-tile:hover .album-vinyl,.album-tile:focus-visible .album-vinyl{transform:translateY(-16%) rotate(8deg)}

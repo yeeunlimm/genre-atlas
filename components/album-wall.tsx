@@ -1,6 +1,6 @@
 "use client";
 
-import {useRef,useState} from "react";
+import {useState} from "react";
 import collection from "@/lib/album-collection.json";
 
 type Album=(typeof collection.albums)[number];
@@ -24,7 +24,6 @@ function RecordSleeve({album,large=false}:{album:Album;large?:boolean}){
 export function AlbumWall({onExploreArtist}:{onExploreArtist:(name:string)=>void}){
  const albums=[...collection.albums,...collection.rightColumn];
  const [selected,setSelected]=useState<Album>(albums[0]);
- const rail=useRef<HTMLDivElement|null>(null);
  const renderAlbum=(album:Album)=><button key={album.sourceUrl} type="button" className="album-tile"
    aria-label={"View "+album.title+" by "+album.artist} aria-pressed={selected.sourceUrl===album.sourceUrl}
    title={album.artist+" — "+album.title}
@@ -42,9 +41,7 @@ export function AlbumWall({onExploreArtist}:{onExploreArtist:(name:string)=>void
    </div>
   </div>
    <div className="album-browser">
-    <button className="album-scroll-button" type="button" aria-label="Scroll albums up" onClick={()=>rail.current?.scrollBy({top:-200})}>↑</button>
-    <div ref={rail} className="album-scroll-rail" role="group" aria-label="Choose a collection album">{albums.map(renderAlbum)}</div>
-    <button className="album-scroll-button" type="button" aria-label="Scroll albums down" onClick={()=>rail.current?.scrollBy({top:200})}>↓</button>
+    <div className="album-scroll-rail" role="group" aria-label="Choose a collection album" tabIndex={0}>{albums.map(renderAlbum)}</div>
    </div>
   </div>
  </section>;
