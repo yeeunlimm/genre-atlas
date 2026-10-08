@@ -166,7 +166,7 @@ export default function Home(){
  <div className="discovery-switch" role="group" aria-label="Search for"><button aria-pressed={discoveryMode==="artist"} onClick={()=>switchDiscovery("artist")}>Artist</button><button aria-pressed={discoveryMode==="song"} onClick={()=>switchDiscovery("song")}>Song</button></div>
  <div hidden={discoveryMode!=="artist"}>
  <form className="search-form" onSubmit={e=>{e.preventDefault();void search(query);}}><Search size={21}/><label className="sr-only" htmlFor="artist-search">Artist name</label><input id="artist-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search an artist" maxLength={100}/><button className="primary" type="submit" aria-label="Search artists">Search <ArrowRight size={18}/></button></form>
- <div className="suggestions"><span>TRY</span>{["Tame Impala","Radiohead","A$AP Rocky","Kanye West"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
+ <div className="suggestions"><span>TRY</span>{["Tame Impala","A$AP Rocky"].map(n=><button key={n} onClick={()=>void search(n)}>{n}</button>)}</div></div>
  <div ref={setSongSearchTarget} hidden={discoveryMode!=="song"} className="song-search-slot"/></div>
  {!account.ready?<div className="personal-playlist-slot" role="status">Checking sign-in…</div>:account.userId?<div ref={setPlaylistTarget} className="personal-playlist-slot" aria-label="Your playlist"/>:<AlbumWall onExploreArtist={name=>{void search(name).then(()=>requestAnimationFrame(()=>{(document.querySelector(".candidate-results")||document.getElementById("artist-discover"))?.scrollIntoView({block:"start",behavior:"instant"});}));}}/>}
  </section>
