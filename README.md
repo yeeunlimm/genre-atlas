@@ -1,135 +1,71 @@
 # Genre Atlas
 
-음악과 아티스트를 탐색하고 나만의 플레이리스트를 만드는 음악 디스커버리 프로젝트입니다.
+**좋아하는 한 곡에서, 다음 음악으로.** 아티스트·장르·앨범을 탐색하고 곡의 연결 관계를 따라 새로운 음악을 발견하는 개인 프로젝트입니다.
 
-## 바로가기
+[사이트 열기](https://project-9oimu.vercel.app/) · [발표자료 PDF](presentation/Genre_Atlas.pdf) · [구조와 요청·응답](docs/architecture.md)
 
-- **[배포 사이트 열기](https://project-9oimu.vercel.app/)**
-- **[발표자료 보기 (PDF)](presentation/Genre_Atlas.pdf)**
+![Genre Atlas 구조도: 브라우저, 서버, 외부 음악 서비스, 별도 Python 학습의 요청과 응답](docs/architecture.png)
 
-## 개발 환경 및 스타터 안내
+## 무엇을 할 수 있나요?
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+| 기능 | 사용 방법 |
+| --- | --- |
+| **아티스트 탐색** | 아티스트 검색 → Related / Genre 전환 → 다른 가수와 앨범 탐색 |
+| **곡 추천** | 곡 검색 → 정확한 버전 선택 → 제작진·샘플 연결을 우선으로 다음 곡 추천 |
+| **나의 플레이리스트** | 카카오 로그인 → 곡 찜 → 찜을 바탕으로 별도의 플레이리스트 생성 |
 
-## Prerequisites
+일반 곡 추천은 로그인 없이 사용할 수 있습니다. **찜 기반 플레이리스트는 곡 추천 대기열을 재사용하지 않습니다.**
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+## 머신러닝은 어디에 쓰이나요?
 
-## Sites Lifecycle
+- **곡 추천 순위:** Python으로 학습한 CatBoost 모델을 숫자 트리로 내보내 웹에서 실행합니다. 선택곡과 후보곡의 장르·길이 등 56개 특징을 비교하고, 적용 가능한 경우 기존 연결 점수 80% + 모델 점수 20%로 정렬합니다.
+- **플레이리스트 선별:** 최근 찜 최대 5곡에서 후보 최대 20곡을 모은 뒤, YouTube 댓글을 분석하여 최대 10곡을 선택합니다. 영어는 사전학습 감성 모델, 한국어는 선택적으로 제공한 감성사전을 사용합니다.
+- **실험 결과를 구분합니다:** CatBoost는 단순 장르 겹침 기준보다 개선됐다고 확인되지 않았습니다. 댓글 감성도 개인의 취향이나 추천 성공 확률을 뜻하지 않습니다.
 
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
+[학습 데이터·평가 결과](docs/song-context-ranking.md) · [댓글 분석·예외 처리](docs/review-playlists.md)
 
-Whenever reopening or moving a checkout, run `node <plugin-root>/scripts/configure-execution-profile.mjs` before project commands. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
+## 로컬 실행
 
-This starter does not use `wrangler.jsonc`.
+Node.js **22.13 이상**이 필요합니다.
 
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
-
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npm ci
+npm run dev:vercel -- --port 3113
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+브라우저에서 [localhost:3113](http://localhost:3113)을 엽니다. 배포 대상은 Next.js / Vercel이며, 기존 Sites용 실행 스크립트는 별도로 보존되어 있습니다.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
+선택 기능의 설정값은 커밋하지 않는 `.env.local` 또는 배포 서버 설정에 둡니다.
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
+| 설정값 | 용도 |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 카카오 로그인 연결용 공개 클라이언트 설정 |
+| `YOUTUBE_API_KEY` | 서버의 YouTube 댓글 조회 |
+| `LASTFM_API_KEY` | 선택적인 유사 곡 후보 출처 |
+| `SENTIMENT_LEXICON_PATH` | 선택적인 서버용 한국어 감성사전 경로 |
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
+**YouTube 키·카카오 Client Secret·Supabase 비밀 키는 브라우저 코드나 GitHub에 넣지 않습니다.** 로그인 리디렉션 등은 [인증 설정](docs/vercel-auth.md)을 참고하세요. 외부 서비스 약관과 요청 한도도 적용됩니다.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
+## 검사
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
-
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+```bash
+node scripts/test-onboarding.cjs
+node scripts/test-musicbrainz-genres.cjs
+node scripts/test-kakao-auth.cjs
+node scripts/test-liked-playlist.cjs
+node scripts/test-playlist-review-flow.cjs
+npm run build:vercel
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+## 알아둘 점
 
-## Diagnostic Commands
+- 찜·후보·플레이리스트 기록은 **로그인 계정별로 이 브라우저에 저장**됩니다. 다른 기기로 동기화하거나 YouTube에 저장하는 기능은 없습니다.
+- 댓글 감성점수가 양수인 곡을 먼저 선택합니다. 정확히 매칭한 영상들의 댓글이 모두 없거나 비활성화된 경우에만 별도 **미분석 0점 예외**가 적용됩니다. 조회 오류·분석 실패·실제 중립/부정 점수와는 다릅니다.
+- 후보나 통과 곡이 부족하면 10곡을 억지로 채우지 않습니다. 매일 자동 생성하는 예약 작업은 구현하지 않았습니다.
+- 외부 음악 정보의 누락·차단·버전 차이가 있을 수 있습니다. 출처와 오류를 표시하며, 장르 조회는 NamuWiki 실패 시 MusicBrainz로 보완합니다.
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+## 코드 안내
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+`app/` 화면·API · `components/` 검색·추천·플레이리스트 UI · `lib/` 조회·정렬·감성분석 로직 · `models/` 배포용 숫자 모델 · `scripts/` 검사·Python 학습 · `docs/` 상세 설명
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+학습 원본, 개인 평가 자료, 댓글 원문, 비밀 설정과 임시 산출물은 공개 저장소에서 제외합니다.
