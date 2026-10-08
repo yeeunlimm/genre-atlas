@@ -8,6 +8,7 @@ import {ArtistAlbums} from "@/components/artist-albums";
 import {saveArtistReturn,readArtistReturn,clearArtistReturnMarker,restoreAlbumPosition,type ArtistReturn} from "@/lib/artist-return";
 import {ArtistCdPlayer} from "@/components/artist-cd-player";
 import {DiscoveryStation} from "@/components/discovery-station";
+import {DiscoveryOnboarding} from "@/components/discovery-onboarding";
 import {AccountButton,useAccount} from "@/components/account-provider";
 import type {GenrePage,GenreArtist} from "@/lib/genre-discovery";
 import type {MusicArtist,AlbumArtwork} from "@/lib/youtube-music";
@@ -164,6 +165,7 @@ export default function Home(){
  return <main>
  <header className="topbar"><a className="brand" href="/" aria-label="Genre Atlas home"><span className="wordmark">GENRE<span>ATLAS</span></span></a><span className="top-caption">MUSIC DISCOVERY</span><nav className="station-nav" aria-label="Music discovery"><a href="#discovery-station">Discovery Station</a><a className="quiet" href="https://www.youtube.com/" target="_blank" rel="noreferrer"><Play size={14}/> Listen <ArrowUpRight size={14}/></a><AccountButton/></nav></header>
  <div className="workspace">
+ <DiscoveryOnboarding onChoose={next=>{switchDiscovery(next);requestAnimationFrame(()=>{const input=document.getElementById(next==="artist"?"artist-search":"station-search");input?.focus({preventScroll:true});input?.scrollIntoView({block:"center",behavior:"instant"});});}}/>
  <section className="search-deck" aria-label="Music discovery">
  <div className="search-main"><img className="discovery-ornament" src="/reference/white-ornate-clef-v1.png" alt="" aria-hidden="true" width={220} height={390}/><h1>DISCOVER</h1>
  <div className="discovery-switch" role="group" aria-label="Search for"><button aria-pressed={discoveryMode==="artist"} onClick={()=>switchDiscovery("artist")}>Artist</button><button aria-pressed={discoveryMode==="song"} onClick={()=>switchDiscovery("song")}>Song</button></div>
