@@ -31,3 +31,16 @@
 @media(max-width:640px){.station-integrated .station-picker .station-origin-copy{gap:0}.station-integrated .station-picker .station-origin-copy .station-feedback{margin:0}.station-integrated .station-picker .station-origin-copy>*{line-height:1.35}}
 /* Song screen on mobile: "Listen on YouTube" sits under the album cover, bottom aligned with the "Credits & samples" line. */
 @media(max-width:640px){.station-integrated .station-current{display:grid;grid-template-columns:minmax(0,1fr) 108px;column-gap:14px}.station-integrated .station-current>*{grid-column:1/-1}.station-integrated .station-track-heading,.station-integrated .station-actions{display:contents}.station-integrated .station-track-copy{grid-column:1;grid-row:1/3}.station-integrated .station-track-heading .station-artwork{grid-column:2;grid-row:1;align-self:start}.station-integrated .station-actions .primary{grid-column:2;grid-row:2;align-self:end;justify-self:stretch;min-height:30px;padding:0 4px;font-size:11px;white-space:nowrap;margin-bottom:20px}.station-integrated .station-actions .primary svg{display:none}.station-integrated .station-actions button{grid-column:1/-1;justify-self:start}}
+
+/* All screens: hide source caption, collection counter and "separate artist collection" note. */
+.results .source-caption,.panel-lower .nav-description,.album-wall-heading>span:last-child{display:none}
+/* Desktop: same as mobile - drop the lower ARTIST RADIO / EXPLORE BY GENRE block; genre chips appear under the related/genre tabs. */
+@media(min-width:641px){.artist-panel>.panel-lower{display:none}.genre-chips-mobile{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.genre-chips-mobile .genre{flex:0 0 auto;width:auto;min-height:0;white-space:nowrap;font-size:13px;line-height:1.3;padding:5px 11px}}
+/* Related / Genre tabs: bigger box, more space between the text and the box edge. */
+.view-controls [role=tablist]{padding:3px!important;gap:3px!important;min-height:0!important;height:auto!important}.view-controls [role=tablist] [role=tab]{padding:6px 10px!important;min-height:0!important;height:auto!important}
+/* All screens: hide the "Independent ... genre discovery" note and the "Open genre source" link. */
+.results .result-note-quiet,.results .genre-progress .genre-actions .source-link{display:none}
+/* All screens: hide the "MUSIC DISCOVERY" caption in the top bar. */
+.topbar .top-caption{display:none}
+/* All screens: hide the "Finding documented credit and sample connections" status texts. */
+.station-integrated .station-status-quiet,.station-integrated .station-meta-quiet{display:none}
