@@ -17,7 +17,7 @@ export function AccountProvider({children}:{children:ReactNode}){
       });
       void client.auth.getSession().then(({error})=>{if(active&&error){setError("Sign-in could not be restored. Please try signing in again.");setReady(true);}});
       return()=>{active=false;subscription.unsubscribe();};
-    }catch(e){setError(e instanceof Error?e.message:"Sign-in is unavailable.");setReady(true);}
+    }catch{setReady(true);}
     return()=>{active=false;};
   },[]);
   async function signIn(returnTo?:string){
@@ -28,7 +28,7 @@ export function AccountProvider({children}:{children:ReactNode}){
       // Override the provider scope instead; the project also allows users without email.
       const {error}=await browserAuth().auth.signInWithOAuth({provider:"kakao",options:{redirectTo:location.origin+"/auth/callback",queryParams:{scope:"profile_nickname profile_image"}}});
       if(error)throw error;
-    }catch{setError("Could not start Kakao sign-in. Allow browser storage and try again.");setBusy(false);}
+    }catch(e){setError(e instanceof Error&&e.message.includes("not configured")?e.message:"Could not start Kakao sign-in. Allow browser storage and try again.");setBusy(false);}
   }
   async function signOut(){
     if(busy)return;setBusy(true);setError("");
