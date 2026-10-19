@@ -26,3 +26,12 @@
 .welcome-footer button{display:flex;align-items:center;gap:12px;min-height:44px;background:transparent;color:#cccbd2;border:0;padding:8px 0 8px 12px;font-size:13px}
 .welcome-footer button:hover{color:#fff}
 @media(max-width:700px){.welcome-panel{padding:24px 20px 10px}.welcome-paths{grid-template-columns:1fr;margin-top:24px}.welcome-path,.welcome-path+.welcome-path,.welcome-path:last-child{padding:20px 0;border-left:0}.welcome-path+.welcome-path{border-top:1px solid #38383e}.welcome-path>svg{margin-bottom:12px}.welcome-path p{max-width:none;margin-bottom:16px;font-size:15px}.welcome-action{font-size:14px}.welcome-intro{font-size:15px}.welcome-footer{flex-wrap:wrap;gap:0 12px}.welcome-heading-row{gap:8px}.welcome-close{border:0}.welcome-guide{margin-top:-12px}}
+
+/* mobile: push header (logo, Discovery Station, Kakao login) down ~5mm */
+@media(max-width:640px){.topbar{margin-top:19px}
+.topbar .station-nav{flex-wrap:nowrap;align-items:center;gap:12px;font-size:12px}
+.topbar .station-nav>a:first-child{white-space:nowrap}
+.topbar{height:auto;min-height:72px}
+.topbar .account-control{display:inline-flex;align-items:center}
+.topbar .account-button.kakao-button{min-height:0;padding:4px 10px;gap:6px;border-radius:4px;font:400 12px/18px Arial,sans-serif}
+.topbar .kakao-symbol{width:14px;height:14px;flex:0 0 14px}}
