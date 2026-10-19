@@ -4,4 +4,30 @@
 .search-main>h1,.search-main>.search-form,.search-main>.suggestions{position:relative;z-index:1}
 .search-main>div{position:relative;z-index:1}
 .search-main>h1,.search-main>.suggestions{text-shadow:0 1px 4px #0c0c0d,0 0 5px #0c0c0d}
-@media(max-width:640px){.search-main{min-height:245px;padding-block:24px}.discovery-ornament{left:-10px;width:155px;height:260px;opacity:.08}}
+@media(max-width:640px){.workspace.workspace{padding-top:12px}.workspace .welcome-guide{margin-top:-14px;margin-bottom:0}.workspace .welcome-guide:not(:has(.welcome-panel)){margin-bottom:7px}.workspace .welcome-guide-tools button{min-height:24px;padding-block:0}.search-main{min-height:0;justify-content:flex-start;padding-block:0 12px}.discovery-ornament{left:-10px;width:155px;height:260px;opacity:.08}}
+/* Mobile: the collection is a small horizontal strip beside the DISCOVER heading (no featured album). */
+@media(max-width:640px){.search-deck{display:block;position:relative}.search-deck .album-wall{position:absolute;top:-9px;right:0;width:150px;max-width:150px;z-index:3}.search-deck .album-wall-heading,.search-deck .album-inline-details,.search-deck .album-feature,.search-deck .album-tile-copy{display:none}.search-deck .album-wall-body{display:block;margin-top:0}.search-deck .album-browser{width:100%}.search-deck .album-scroll-rail{flex-direction:row;height:auto;gap:6px;padding:2px 4px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x proximity}.search-deck .album-tile{flex:0 0 32px;width:32px}}
+/* Radio + genre list: a second copy sits below the word cloud on mobile (the Genre tab covers the rest). */
+.panel-lower-mobile{display:none}
+@media(max-width:640px){.artist-panel>.panel-lower{display:none}.artist-panel.panel-lower-mobile{display:block;min-height:0;padding:6px 20px 23px;border-top:1px solid #171716;border-bottom:0}.panel-lower-mobile>.panel-lower{display:block}.panel-lower-mobile>.panel-lower>.divider:first-child{display:none}}
+/* Mobile: smaller word cloud. */
+@media(max-width:640px){.results .cloud{zoom:.72;min-height:0}}
+/* Mobile: genre chips sit under the Related/Genre tabs so a genre can be picked next to the cloud. */
+.genre-chips-mobile{display:none}
+@media(max-width:640px){.genre-chips-mobile{display:flex;gap:6px;margin:0 0 10px;padding-bottom:2px;overflow-x:auto;scrollbar-width:none}.genre-chips-mobile::-webkit-scrollbar{display:none}.genre-chips-mobile .genre{flex:0 0 auto;width:auto;min-height:0;white-space:nowrap;font-size:12px;line-height:1.3;padding:4px 9px}}
+/* Mobile: hide source captions and album helper notes. */
+@media(max-width:640px){.results .source-caption,.results .release-identity>span,.results .release-note{display:none}}
+/* Mobile: album controls use the same small size as the genre chips. */
+@media(max-width:640px){.results .release-sort{gap:6px}.results .release-sort button,.results .release-identity button,.results .release-filters button{min-height:0;padding:4px 9px;font-size:12px;line-height:1.3}.results .release-filters{gap:6px;margin:10px 0}.results .release-filters small{margin-left:5px}.results .release-identity{margin-top:8px;gap:6px}}
+/* Mobile: no Artist Radio / Explore by Genre block below the cloud (the Related/Genre tabs and genre chips cover it). */
+@media(max-width:640px){.artist-panel.panel-lower-mobile{display:none}}
+/* Mobile: hide the "Open genre source" link. */
+@media(max-width:640px){.results .genre-progress .genre-actions .source-link{display:none}}
+/* Mobile: hide the generic "Independent ... genre discovery" note. */
+@media(max-width:640px){.results .result-note-quiet{display:none}}
+/* Song discovery on mobile: quieter status text, tighter song info, sign-in block moved to the bottom. */
+.station-account.station-account-bottom{display:none}
+@media(max-width:640px){.station-account.station-account-top{display:none}.station-account.station-account-bottom{display:flex;margin:12px 0 0}.station-integrated .station-status-quiet,.station-integrated .station-meta-quiet{display:none}.station-integrated .station-header{padding:14px 18px 2px;gap:2px;border-bottom:0}.station-integrated .station-search-status{padding:0 18px 8px}.station-integrated .station-origin-copy{gap:2px}.station-integrated .station-origin-copy a,.station-integrated .station-origin-copy button{min-height:0!important;padding-block:1px}.station-integrated .station-origin-copy>div{margin-bottom:0}.station-integrated .station-origin-copy p{margin:0}main footer:not(.station-foot)>span:last-child{display:none}}
+@media(max-width:640px){.station-integrated .station-picker .station-origin-copy{gap:0}.station-integrated .station-picker .station-origin-copy .station-feedback{margin:0}.station-integrated .station-picker .station-origin-copy>*{line-height:1.35}}
+/* Song screen on mobile: "Listen on YouTube" sits under the album cover, bottom aligned with the "Credits & samples" line. */
+@media(max-width:640px){.station-integrated .station-current{display:grid;grid-template-columns:minmax(0,1fr) 108px;column-gap:14px}.station-integrated .station-current>*{grid-column:1/-1}.station-integrated .station-track-heading,.station-integrated .station-actions{display:contents}.station-integrated .station-track-copy{grid-column:1;grid-row:1/3}.station-integrated .station-track-heading .station-artwork{grid-column:2;grid-row:1;align-self:start}.station-integrated .station-actions .primary{grid-column:2;grid-row:2;align-self:end;justify-self:stretch;min-height:30px;padding:0 4px;font-size:11px;white-space:nowrap;margin-bottom:20px}.station-integrated .station-actions .primary svg{display:none}.station-integrated .station-actions button{grid-column:1/-1;justify-self:start}}
