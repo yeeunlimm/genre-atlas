@@ -52,7 +52,11 @@ export function rankCandidates(rows:Candidate[],seeds:StationTrack[],memory:Memo
       const learned=learnedScore?.(r);
       return {...r,score:learned!==undefined&&Number.isFinite(learned)?learned:perRoute[0]+.2*perRoute.slice(1).reduce((a,b)=>a+b,0)+.08*Math.max(0,coverage-1),feedbackBoost:!!learnedScore||r.paths.some(p=>weights[p.route]!==1)};
     }).sort((a,b)=>b.score-a.score||songKey(a.track).localeCompare(songKey(b.track)));
-  return onePerArtist(ranked,consumed) as Candidate[];
+  const picked=onePerArtist(ranked,consumed) as Candidate[];
+  // Single-song discovery: do not open with the starting song's own artist; those songs stay available after everyone else.
+  if(seeds.length!==1)return picked;
+  const own=(r:Candidate)=>artist(r.track)===artist(seeds[0]);
+  return [...picked.filter(r=>!own(r)),...picked.filter(own)];
 }
 export function recordVote(memory:Memory,row:Candidate,vote:"like"|"dislike",now=Date.now()):Memory{
   return cleanMemory({...memory,votes:{...memory.votes,[songKey(row.track)]:{vote,routes:[...new Set(row.paths.map(p=>p.route))],at:now}}},now);
