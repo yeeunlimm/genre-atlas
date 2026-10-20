@@ -15,6 +15,7 @@ const norm=(s:string)=>s.toLowerCase().replaceAll("$","s").normalize("NFKD").rep
 const artist=(t:StationTrack)=>norm(t.primaryArtistName||t.artist.replace(/\s*(?:\(|\[)?\s*\b(?:feat\.?|ft\.?|featuring)\s+.*$/i,""));
 const title=(t:StationTrack)=>norm(t.title.replace(/[\[(](?:feat\.?|ft\.?|featuring)\s+[^\])]*[\])]/gi,""));
 export const songKey=(t:StationTrack)=>artist(t)+":"+title(t);
+export const sameArtist=(a:StationTrack,b:StationTrack)=>artist(a)===artist(b);
 export const albumKey=(s:string)=>norm(s.replace(/\s+-\s+(?:Single|EP)$/i,"").replace(/\([^)]*(?:deluxe|expanded|remaster|anniversary|bonus|edition)[^)]*\)|\[[^\]]*(?:deluxe|expanded|remaster|anniversary|bonus|edition)[^\]]*\]/gi,"").replace(/\s*[-–:]\s*(?:deluxe|expanded|remaster|anniversary|bonus|edition).*$/i,""));
 export function excluded(t:StationTrack,seeds:StationTrack[]) {
   return !t.album || seeds.some(s=>s.id===t.id||s.recordingId===t.recordingId||songKey(s)===songKey(t)||
