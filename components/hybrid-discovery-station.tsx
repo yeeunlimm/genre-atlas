@@ -6,7 +6,7 @@ import {stationCatalog,type StationTrack} from "@/lib/station-catalog";
 import {recommend,trackYouTubeUrl} from "@/lib/discovery-station";
 import {appendExposure,emptyLearning,exportLearning,learningKey,makeExposure,rateExposure,readLearning,trainRanker,type LearningData} from "@/lib/station-learning";
 import {selectedSongRows,selectedSongMemory} from '@/lib/selected-song-discovery';
-import {blankMemory,cleanMemory,excluded,mergeCandidates,MEMORY_KEY,recordVote,remember,routeLabels,routeWeights,songKey,type Candidate,type Memory} from "@/lib/hybrid-station";
+import {blankMemory,cleanMemory,excluded,mergeCandidates,MEMORY_KEY,recordVote,remember,routeLabels,routeWeights,songKey,sameArtist,type Candidate,type Memory} from "@/lib/hybrid-station";
 import {rankerCanScoreSeed,rankSongCandidates} from '@/lib/catboost-seed-ranker';
 import {useSeedRanker} from './use-seed-ranker';
 import type {LiveStationResult} from "@/lib/live-station";
@@ -76,26 +76,28 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
   useEffect(()=>{if(!hydrated)return;try{localStorage.setItem(learningKey(userId),JSON.stringify(learning));}catch{setStorageNote("Your browser could not save training records. They remain in this tab only.");}},[learning,userId,hydrated]);
   const ranked=useMemo(()=>rankSongCandidates(discoveryRows,seeds,discoveryMemory,consumed,seedRanker.model),[discoveryRows,seeds,discoveryMemory,consumed,seedRanker.model]);
   // Keep the visible song stable while slower sources reorder the upcoming queue.
-  useEffect(()=>{if(hydrated&&!current&&ranked[0]){
-    const row=ranked[0],event=makeExposure(row,seeds,learningRef.current,group.current||crypto.randomUUID(),crypto.randomUUID());
-    exposure.current={id:event.id,song:event.song};updateLearning(appendExposure(learningRef.current,event));
-    setCurrent(row);setMemory(m=>remember(m,row.track));
-  }},[ranked,current,hydrated,seeds]);
   useEffect(()=>{if(current&&(excluded(current.track,seeds)||liked.some(t=>songKey(t)===songKey(current.track)))){setCurrent(undefined);setNotice("Already liked or excluded. Moving to another discovery.");}},[current,seeds,liked]);
   const shown=current&&!liked.some(t=>songKey(t)===songKey(current.track))?(discoveryRows.find(r=>songKey(r.track)===songKey(current.track))||current):undefined;
   const queue=useMemo(()=>rankSongCandidates(discoveryRows,seeds,discoveryMemory,current?[...consumed,current.track]:consumed,seedRanker.model),[discoveryRows,seeds,discoveryMemory,current,consumed,seedRanker.model]);
   const weights=routeWeights(discoveryMemory),loading=Object.values(progress).some(p=>p.state==="loading");
   const plan=songDiscoveryJobs(discoveryRows,seeds,Object.values(progress),autoAttempts.current);
-  const finding=loading||recoveryBusy||(!current&&!ranked.length&&plan.length>0);
+  // Do not open with the starting song's own artist while more credit pages can still bring other artists.
+  const waitOthers=seeds.length===1&&!!ranked[0]&&sameArtist(ranked[0].track,seeds[0])&&(loading||recoveryBusy||plan.length>0);
+  const finding=loading||recoveryBusy||(!current&&!ranked.length&&plan.length>0)||(!current&&waitOthers);
+  useEffect(()=>{if(hydrated&&!current&&ranked[0]&&!waitOthers){
+    const row=ranked[0],event=makeExposure(row,seeds,learningRef.current,group.current||crypto.randomUUID(),crypto.randomUUID());
+    exposure.current={id:event.id,song:event.song};updateLearning(appendExposure(learningRef.current,event));
+    setCurrent(row);setMemory(m=>remember(m,row.track));
+  }},[ranked,current,hydrated,seeds,waitOthers]);
   const relatedFallback=Object.values(progress).some(p=>p.route==='related-artists')||plan.some(p=>p.route==='related-artists');
   const emptyMessage=emptyStationMessage(discoveryRows,seeds,discoveryMemory,consumed,Object.values(progress));
   useEffect(()=>{
     const c=stationRequest.current;
-    if(!hydrated||current||ranked.length||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
+    if(!hydrated||queue.length>=3||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
     const jobs=songDiscoveryJobs(discoveryRows,seeds,Object.values(progress),autoAttempts.current);if(!jobs.length)return;
     for(const job of jobs)autoAttempts.current.add(attemptKey(job));
     void recover(jobs,c);
-  },[hydrated,current,ranked,discoveryRows,seeds,progress,loading,recoveryBusy]);
+  },[hydrated,queue,discoveryRows,seeds,progress,loading,recoveryBusy]);
   async function recover(jobs:Job[],controller:AbortController){
     if(recoveryLock.current||controller.signal.aborted)return;
     recoveryLock.current=true;setRecoveryBusy(true);setNotice(jobs.some(job=>job.route==='related-artists')?"No connected candidates remain. Checking songs by related artists…":"Checking more documented credit and sample connections…");
