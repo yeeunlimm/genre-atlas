@@ -69,3 +69,4 @@ npm run build:vercel
 `app/` 화면·API · `components/` 검색·추천·플레이리스트 UI · `lib/` 조회·정렬·감성분석 로직 · `models/` 배포용 숫자 모델 · `scripts/` 검사·Python 학습 · `docs/` 상세 설명
 
 학습 원본, 개인 평가 자료, 댓글 원문, 비밀 설정과 임시 산출물은 공개 저장소에서 제외합니다.
+
