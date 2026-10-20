@@ -235,7 +235,13 @@ async function graph(id:string):Promise<Graph>{
     if(!people.length)notes.push("Neither available source lists usable production or writing credits for this version yet.");
     else if(!targets.length)notes.push("Credits were found, but their other participation records could not be linked confidently. Namesakes were not merged.");
     const ordered=targets.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
-    const distinct=ordered.filter((t,i)=>ordered.findIndex(x=>x.id===t.id&&x.kind===t.kind)===i);
+    const deduped=ordered.filter((t,i)=>ordered.findIndex(x=>x.id===t.id&&x.kind===t.kind)===i);
+    // Alternate between credited people so one person's top-scored works (often the
+    // seed artist's own production credits) cannot crowd out everyone else's.
+    const lanes=new Map<string,Target[]>();
+    for(const t of deduped)lanes.set(t.credit.person,[...(lanes.get(t.credit.person)||[]),t]);
+    const distinct:Target[]=[];
+    for(let i=0;distinct.length<deduped.length;i++)for(const lane of lanes.values())if(lane[i])distinct.push(lane[i]);
     return {seed,targets:distinct,notes:[...new Set(notes)],partial,status:distinct.length?"connected":people.length?"connections-missing":"credits-missing"};
   });
 }
