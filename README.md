@@ -2,7 +2,7 @@
 
 **좋아하는 한 곡에서, 다음 음악으로.** 아티스트·장르·앨범을 탐색하고 곡의 연결 관계를 따라 새로운 음악을 발견하는 개인 프로젝트입니다.
 
-[사이트 열기](https://project-9oimu.vercel.app/) · [발표자료 PDF](presentation/Genre_Atlas.pdf) · [구조와 요청·응답](docs/architecture.md)
+[사이트 열기](https://rebrand.ly/unheard) · [발표자료 PDF](presentation/Genre_Atlas.pdf) · [구조와 요청·응답](docs/architecture.md)
 
 ![Genre Atlas 구조도: 브라우저, 서버, 외부 음악 서비스, 별도 Python 학습의 요청과 응답](docs/architecture.png)
 
