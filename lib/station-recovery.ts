@@ -33,13 +33,13 @@ export function songDiscoveryJobs(rows:Candidate[],seeds:StationTrack[],progress
   const others=[...artists].filter(a=>a!==seedArtist).length;
   if(rows.length?others>=3||progress.some(p=>p.state==='error'):progress.some(p=>p.state==='error'||p.state==='partial'))return recovery;
   const seed=seeds[0],credit=progress.find(p=>p.seed.id===seed.id&&p.route==='credits');
-  const related={seed,route:'related-artists' as const,offset:0};
-  if(!credit||!['ready','empty','partial'].includes(credit.state)||
-    progress.some(p=>p.seed.id===seed.id&&p.route==='related-artists')||attempted.has(attemptKey(related)))return recovery;
-  // Like the first credits request, this route's first lookup is allowed once,
-  // even if the bounded recovery budget was consumed by credit pagination.
-  // Related artists start right after the first credits page, alongside any further credit pages.
-  return [related,...recovery].slice(0,2);
+  const fallbacks=(['related-artists','similar-tracks'] as const)
+    .map(route=>({seed,route,offset:0}))
+    .filter(job=>!progress.some(p=>p.seed.id===seed.id&&p.route===job.route)&&!attempted.has(attemptKey(job)));
+  // Last.fm similar tracks stays disabled (no retry) until the server has an API key.
+  if(!credit||!['ready','empty','partial'].includes(credit.state)||!fallbacks.length)return recovery;
+  // Fallback routes start right after the first credits page, alongside any further credit pages.
+  return [...fallbacks,...recovery].slice(0,3);
 }
 export function emptyStationMessage(rows:Candidate[],seeds:StationTrack[],memory:Memory,consumed:StationTrack[],progress:Progress[]){
   const failed=progress.some(p=>p.state==="error"||p.state==="partial");
