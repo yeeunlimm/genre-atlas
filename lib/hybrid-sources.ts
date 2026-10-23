@@ -63,7 +63,7 @@ export async function youtubeRelated(seed:StationTrack,offset=0):Promise<SourceR
 export async function similarCandidates(seed:StationTrack,key?:string):Promise<SourceResult>{
   if(!key)return {rows:[],state:"disabled",note:"Last.fm similar tracks is off: the site owner has not configured an API key. Other routes remain available.",nextOffset:null};
   const url="https://ws.audioscrobbler.com/2.0/?"+new URLSearchParams({method:"track.getsimilar",artist:seed.artist,track:seed.title,api_key:key,format:"json",autocorrect:"1",limit:"12"});
-  const response=await fetch(url,{signal:AbortSignal.timeout(12000)});
+  const response=await fetch(url,{signal:AbortSignal.timeout(12000),headers:{"User-Agent":"GenreAtlas/1.0 (https://project-9oimu.vercel.app)",Accept:"application/json"}});
   if(!response.ok)throw new MusicLookupError("Last.fm","similar-tracks","upstream_error",response.status);
   const data=await response.json() as {error?:number;similartracks?:{track?:{name:string;artist:{name:string};match:string;url?:string}[]}};
   if(data.error)throw new MusicLookupError("Last.fm","similar-tracks","lastfm_error_"+data.error);
