@@ -68,6 +68,8 @@ export async function similarCandidates(seed:StationTrack,key?:string):Promise<S
   const data=await response.json() as {error?:number;similartracks?:{track?:{name:string;artist:{name:string};match:string;url?:string}[]}};
   if(data.error)throw new MusicLookupError("Last.fm","similar-tracks","lastfm_error_"+data.error);
   const tracks=Array.isArray(data.similartracks?.track)?data.similartracks!.track.slice(0,12):[];
+  // Track-level data is empty for most songs; Last.fm artist-level similarity covers far more.
+  if(!tracks.length)return similarArtists(seed,key);
   const max=Math.max(1,...tracks.map(t=>Number(t.match)||0));
   const fetched=await mapLimited(tracks,async(t):Promise<Candidate[]>=>{
     if(!t.name||!t.artist?.name)return [];
@@ -78,6 +80,24 @@ export async function similarCandidates(seed:StationTrack,key?:string):Promise<S
   });
   const rows=fetched.flatMap(r=>r.status==="fulfilled"?r.value:[]),partial=fetched.some(r=>r.status==="rejected");
   return {rows,state:partial?"partial":rows.length?"ready":"empty",note:partial?"Some similar tracks could not be resolved. Retry this route.":"Last.fm similarity matched to Apple or MusicBrainz album metadata. Unresolved songs are omitted.",nextOffset:null};
+}
+async function similarArtists(seed:StationTrack,key:string):Promise<SourceResult>{
+  const name=seed.primaryArtistName||seed.artist;
+  const url="https://ws.audioscrobbler.com/2.0/?"+new URLSearchParams({method:"artist.getsimilar",artist:name,api_key:key,format:"json",autocorrect:"1",limit:"10"});
+  const response=await fetch(url,{signal:AbortSignal.timeout(12000),headers:{"User-Agent":"GenreAtlas/1.0 (https://project-9oimu.vercel.app)",Accept:"application/json"}});
+  if(!response.ok)throw new MusicLookupError("Last.fm","similar-artists","upstream_error",response.status);
+  const data=await response.json() as {error?:number;similarartists?:{artist?:{name:string;match:string}[]}};
+  if(data.error)throw new MusicLookupError("Last.fm","similar-artists","lastfm_error_"+data.error);
+  const peers=(Array.isArray(data.similarartists?.artist)?data.similarartists!.artist:[]).filter(a=>a.name&&a.name.toLowerCase()!==name.toLowerCase()).slice(0,8);
+  const fetched=await mapLimited(peers,async(peer,index):Promise<Candidate[]>=>{
+    if(musicAborted())throw new Error("Request deadline reached.");
+    const match=(await catalog(peer.name)).tracks.find(row=>!excluded(row,[seed]));if(!match)return [];
+    const source={label:"Last.fm · similar artists",url:"https://www.last.fm/music/"+encodeURIComponent(name)+"/+similar"};
+    return [{track:match,score:0,feedbackBoost:false,paths:[{route:"similar-tracks",seedId:seed.id,confidence:Math.max(.45,.5+.3*(Number(peer.match)||0)-index*.01)}],
+      reasons:[{kind:"related-artist",label:"Related artist · Last.fm",detail:peer.name+" is listed as similar to "+name+" in Last.fm listening data. This is artist-level discovery, not a measured sound match.",sources:[source,match.source]}]}];
+  });
+  const rows=fetched.flatMap(r=>r.status==="fulfilled"?r.value:[]),partial=fetched.some(r=>r.status==="rejected");
+  return {rows,state:partial?"partial":rows.length?"ready":"empty",note:(partial?"Some similar artists could not be resolved. ":"")+"Last.fm similar artists matched to Apple or MusicBrainz tracks.",nextOffset:null};
 }
 export async function discoverSource(id:string,route:Route,offset=0,key?:string){
   if(route==="similar-tracks"&&!key)return similarCandidates({} as StationTrack);
