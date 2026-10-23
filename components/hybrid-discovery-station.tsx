@@ -93,7 +93,7 @@ export function DiscoveryStation({playlistTarget,searchTarget,active=true,onRequ
   const emptyMessage=emptyStationMessage(discoveryRows,seeds,discoveryMemory,consumed,Object.values(progress));
   useEffect(()=>{
     const c=stationRequest.current;
-    if(!hydrated||queue.length>=3||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
+    if(!hydrated||(queue.length>=3&&new Set(queue.map(r=>r.track.artist.split(/,|&| feat\.?| ft\.?/i)[0].trim().toLowerCase())).size>=3)||!seeds.length||loading||recoveryLock.current||!c||c.signal.aborted)return;
     const jobs=songDiscoveryJobs(discoveryRows,seeds,Object.values(progress),autoAttempts.current);if(!jobs.length)return;
     for(const job of jobs)autoAttempts.current.add(attemptKey(job));
     void recover(jobs,c);
