@@ -116,6 +116,33 @@ async function appleSongSearch(query:string,limit:number){
   if(!completed.length)throw (attempts[0] as PromiseRejectedResult).reason;
   return completed.flatMap(attempt=>Array.isArray(attempt.value.results)?attempt.value.results:[]);
 }
+const lastfmKey=()=>process.env.LASTFM_API_KEY?.trim().replace(/^['"]|['"]$/g,"")||"";
+async function lastfmApi(params:Record<string,string>):Promise<Raw>{
+  const key=lastfmKey();if(!key)throw new StationError("Last.fm is not configured.",503);
+  const response=await fetch("https://ws.audioscrobbler.com/2.0/?"+new URLSearchParams({...params,api_key:key,format:"json",autocorrect:"1"}),{signal:AbortSignal.timeout(8000),headers:{"User-Agent":"GenreAtlas/1.0 (https://project-9oimu.vercel.app)",Accept:"application/json"}});
+  if(!response.ok)throw new StationError("Last.fm lookup failed.",502);
+  const data=await response.json() as Raw;if(data.error)throw new StationError("Last.fm lookup failed.",502);
+  return data;
+}
+// Songs missing from Apple/Deezer/MusicBrainz can still start a station from Last.fm.
+const lastfmTrack=(artist:string,title:string,album?:string,tags:string[]=[]):StationTrack|null=>{
+  const id="lastfm:"+artist+"|"+title;if(!artist||!title||id.length>80)return null;
+  const s={label:"Last.fm · track metadata",url:"https://www.last.fm/music/"+encodeURIComponent(artist)+"/_/"+encodeURIComponent(title)};
+  return {id,recordingId:id,title,artist,artistId:"lastfm:"+normalize(artist),album:album||title,albumFamily:normalize(artist)+":"+albumKey(album||title),source:s,checkedAt:checkedAt(),genres:tags.slice(0,3).map(name=>({name,scope:"track" as const,source:s})),credits:[]};
+};
+async function lastfmSearch(q:string):Promise<StationTrack[]>{
+  const data=await lastfmApi({method:"track.search",track:q,limit:"20"});
+  const rows=Array.isArray(data.results?.trackmatches?.track)?data.results.trackmatches.track:[];
+  return rows.map((r:Raw)=>lastfmTrack(String(r.artist||""),String(r.name||""))).filter(Boolean) as StationTrack[];
+}
+async function lastfmLoad(id:string):Promise<StationTrack|null>{
+  const at=id.indexOf("|");if(at<0)return null;
+  const artist=id.slice(7,at),title=id.slice(at+1);
+  let album:string|undefined,tags:string[]=[];
+  try{const info=await lastfmApi({method:"track.getInfo",artist,track:title});album=info.track?.album?.title;tags=(info.track?.toptags?.tag||[]).map((t:Raw)=>String(t.name));}catch{}
+  if(!tags.length){try{const top=await lastfmApi({method:"artist.gettoptags",artist});tags=(top.toptags?.tag||[]).slice(0,3).map((t:Raw)=>String(t.name));}catch{}}
+  return lastfmTrack(artist,title,album,tags);
+}
 export async function liveSearch(q:string,limit=40,catalog="apple"){
   if(q.trim().length<2||q.length>120)throw new StationError("Enter 2–120 characters to search for a song or artist.",400);
   const local=searchTracks(q,stationCatalog);
@@ -124,7 +151,8 @@ export async function liveSearch(q:string,limit=40,catalog="apple"){
   try{
     const rows=await appleSongSearch(q,limit);
     const live=rows.map(parseApple).filter(Boolean) as StationTrack[];
-    const tracks=unique([...live,...local.filter(t=>!live.some(x=>sameSong(t,x)&&sameAlbum(t,x)))]);
+    const extra=live.length<3&&lastfmKey()?await lastfmSearch(q).catch(()=>[] as StationTrack[]):[];
+    const tracks=unique([...live,...local.filter(t=>!live.some(x=>sameSong(t,x)&&sameAlbum(t,x))),...extra.filter(t=>!live.some(x=>sameSong(t,x)))]);
     rememberTracks(tracks);
     // Artist+song queries should not put tribute covers ahead of the named artist.
     const terms=q.split(/\s+/).map(normalize).filter(Boolean);
@@ -132,7 +160,7 @@ export async function liveSearch(q:string,limit=40,catalog="apple"){
     tracks.sort((a,b)=>relevance(b)-relevance(a)||Number(a.explicitness==="cleaned")-Number(b.explicitness==="cleaned"));
     return {tracks,provider:"Apple catalog",canExpand:live.length>=limit&&limit<200,warning:"Apple US and Korea catalogs checked."};
   }catch(e){
-    if(catalog==="apple-only")throw e;
+    if(catalog==="apple-only"){const fallback=lastfmKey()?await lastfmSearch(q).catch(()=>[] as StationTrack[]):[];if(fallback.length)return {tracks:rememberTracks(fallback),provider:"Last.fm",canExpand:false,warning:"Apple search is unavailable. Showing Last.fm results."};throw e;}
     // A second public catalog keeps search usable when Apple's service is unavailable.
     try{
       return {tracks:rememberTracks(unique([...local,...await searchMusicBrainz(q)])),provider:"MusicBrainz",canExpand:false,warning:"Apple search is unavailable. Showing MusicBrainz results; release coverage may differ."};
@@ -148,6 +176,7 @@ export async function loadTrack(id:string):Promise<StationTrack>{
     const data=await apple("lookup?id="+id.slice(7)+"&entity=song&country=US");
     const track=(data.results||[]).map(parseApple).find((t:StationTrack|null)=>t?.id===id);if(track)return track;
   }else if(id.startsWith("mb:")&&uuid.test(id.slice(3))){const t=parseRecording(await record(id.slice(3)));if(t)return t;}
+  else if(id.startsWith("lastfm:")){const t=await lastfmLoad(id);if(t)return rememberTracks([t])[0];}
   throw new StationError("This song could not be found. Search for it again.",404);
 }
 export function chooseRecording(rows:Raw[],track:StationTrack):Raw|undefined{
