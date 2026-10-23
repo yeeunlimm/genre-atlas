@@ -27,7 +27,12 @@ export function songDiscoveryJobs(rows:Candidate[],seeds:StationTrack[],progress
   // This is the no-connections condition, NOT any empty ranked queue. A failed
   // source, disliked/consumed candidates or recent-only exclusions must not open
   // an unrelated route. Already-liked songs have been removed from rows upstream.
-  if(rows.length||progress.some(p=>p.state==='error'||p.state==='partial'))return [];
+  // Thin results count too: connected candidates spanning fewer than 3 distinct
+  // artists (often only the seed's own songs) also get the related-artists route.
+  const artists=new Set(rows.map(r=>r.track.artist.split(/,|&| feat\.?| ft\.?/i)[0].trim().toLowerCase()));
+  const seedArtist=seeds[0].artist.split(/,|&| feat\.?| ft\.?/i)[0].trim().toLowerCase();
+  const others=[...artists].filter(a=>a!==seedArtist).length;
+  if(rows.length?others>=3||progress.some(p=>p.state==='error'):progress.some(p=>p.state==='error'||p.state==='partial'))return [];
   const seed=seeds[0],credit=progress.find(p=>p.seed.id===seed.id&&p.route==='credits');
   const related={seed,route:'related-artists' as const,offset:0};
   if(!credit||!['ready','empty'].includes(credit.state)||
