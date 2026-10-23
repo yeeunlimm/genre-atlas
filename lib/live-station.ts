@@ -133,7 +133,8 @@ const lastfmTrack=(artist:string,title:string,album?:string,tags:string[]=[]):St
 async function lastfmSearch(q:string):Promise<StationTrack[]>{
   const data=await lastfmApi({method:"track.search",track:q,limit:"20"});
   const rows=Array.isArray(data.results?.trackmatches?.track)?data.results.trackmatches.track:[];
-  return rows.map((r:Raw)=>lastfmTrack(String(r.artist||""),String(r.name||""))).filter(Boolean) as StationTrack[];
+  const junk=/\b(official|video|lyric|live|session|conan|tv|radio|visualizer|audio)\b|\s-\s/i;
+  return (rows.map((r:Raw)=>lastfmTrack(String(r.artist||""),String(r.name||""))).filter(Boolean) as StationTrack[]).filter(t=>!junk.test(t.title)&&!/\b(records|radio|vevo|tv|music)$/i.test(t.artist)).slice(0,6);
 }
 async function lastfmLoad(id:string):Promise<StationTrack|null>{
   const at=id.indexOf("|");if(at<0)return null;
@@ -151,7 +152,7 @@ export async function liveSearch(q:string,limit=40,catalog="apple"){
   try{
     const rows=await appleSongSearch(q,limit);
     const live=rows.map(parseApple).filter(Boolean) as StationTrack[];
-    const extra=live.length<3&&lastfmKey()?await lastfmSearch(q).catch(()=>[] as StationTrack[]):[];
+    const extra=lastfmKey()?await lastfmSearch(q).catch(()=>[] as StationTrack[]):[];
     const tracks=unique([...live,...local.filter(t=>!live.some(x=>sameSong(t,x)&&sameAlbum(t,x))),...extra.filter(t=>!live.some(x=>sameSong(t,x)))]);
     rememberTracks(tracks);
     // Artist+song queries should not put tribute covers ahead of the named artist.
