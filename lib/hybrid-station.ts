@@ -57,7 +57,13 @@ export function rankCandidates(rows:Candidate[],seeds:StationTrack[],memory:Memo
   // Single-song discovery: do not open with the starting song's own artist; those songs stay available after everyone else.
   if(seeds.length!==1)return picked;
   const own=(r:Candidate)=>artist(r.track)===artist(seeds[0]);
-  return [...picked.filter(r=>!own(r)),...picked.filter(own)];
+  const queue=[...picked.filter(r=>!own(r)),...picked.filter(own)];
+  // When the credit graph only reaches a few artists, one-song-per-artist would leave a single entry.
+  // Fill with further songs by those artists, after everyone else, so the station does not dead-end.
+  if(queue.length>=5)return queue;
+  const have=new Set(queue.map(r=>songKey(r.track))),seen=new Set(consumed.map(songKey));
+  const extra=ranked.filter(r=>!have.has(songKey(r.track))&&!seen.has(songKey(r.track)));
+  return [...queue,...extra].slice(0,10) as Candidate[];
 }
 export function recordVote(memory:Memory,row:Candidate,vote:"like"|"dislike",now=Date.now()):Memory{
   return cleanMemory({...memory,votes:{...memory.votes,[songKey(row.track)]:{vote,routes:[...new Set(row.paths.map(p=>p.route))],at:now}}},now);
