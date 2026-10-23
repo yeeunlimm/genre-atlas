@@ -1,6 +1,6 @@
 import {apple,loadTrack,normalize,parseApple,musicBrainzCatalog,StationError,rememberTracks,musicBrainzDeezerArtist} from "./live-station";
 import {deezer,deezerArtist,parseDeezer} from "./deezer-catalog";
-import {logMusicError,musicAborted} from "./music-request";
+import {logMusicError,musicAborted,MusicLookupError} from "./music-request";
 import {music, type MusicArtist} from "./youtube-music";
 import {excluded, type Candidate, type Route} from "./hybrid-station";
 import type {StationTrack} from "./station-catalog";
@@ -64,9 +64,9 @@ export async function similarCandidates(seed:StationTrack,key?:string):Promise<S
   if(!key)return {rows:[],state:"disabled",note:"Last.fm similar tracks is off: the site owner has not configured an API key. Other routes remain available.",nextOffset:null};
   const url="https://ws.audioscrobbler.com/2.0/?"+new URLSearchParams({method:"track.getsimilar",artist:seed.artist,track:seed.title,api_key:key,format:"json",autocorrect:"1",limit:"12"});
   const response=await fetch(url,{signal:AbortSignal.timeout(12000)});
-  if(!response.ok)throw new StationError("Last.fm is unavailable. Retry this route.");
+  if(!response.ok)throw new MusicLookupError("Last.fm","similar-tracks","upstream_error",response.status);
   const data=await response.json() as {error?:number;similartracks?:{track?:{name:string;artist:{name:string};match:string;url?:string}[]}};
-  if(data.error)throw new StationError("Last.fm could not complete this lookup. Check the server key or retry later.");
+  if(data.error)throw new MusicLookupError("Last.fm","similar-tracks","lastfm_error_"+data.error);
   const tracks=Array.isArray(data.similartracks?.track)?data.similartracks!.track.slice(0,12):[];
   const max=Math.max(1,...tracks.map(t=>Number(t.match)||0));
   const fetched=await mapLimited(tracks,async(t):Promise<Candidate[]>=>{
