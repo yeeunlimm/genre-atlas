@@ -180,9 +180,20 @@ async function creditPerson(name:string){
   if(result.count>100)return undefined;
   return chooseCreditPerson(result.artists||[],name);
 }
+// Songs picked from Deezer or MusicBrainz carry no genre. Borrow the genre label from the same song in Apple's catalog so genre-based ranking can still apply.
+function withBorrowedGenres(t:StationTrack):Promise<StationTrack>{
+  if(t.genres.length)return Promise.resolve(t);
+  return cached("genre-borrow:"+t.id,3600_000,async()=>{
+    try{
+      const rows=await appleSongSearch(withoutFeatures(t.title)+" "+primaryArtist(t.artist),10);
+      const match=(rows.map(parseApple).filter(Boolean) as StationTrack[]).find(x=>x.genres.length>0&&sameSong(t,x));
+      return match?{...t,genres:match.genres}:t;
+    }catch{return t;}
+  });
+}
 async function graph(id:string):Promise<Graph>{
   return cached("graph:"+id,1800_000,async()=>{
-    const original=await loadTrack(id),notes:string[]=[];
+    const original=await withBorrowedGenres(await loadTrack(id)),notes:string[]=[];
     let partial=false;
     const [recordingResult,appleResult]=await Promise.allSettled([resolveRecording(original),cached("apple-credits:"+id,3600_000,()=>fetchAppleCredits(original))]);
     const r=recordingResult.status==="fulfilled"?recordingResult.value:null;
